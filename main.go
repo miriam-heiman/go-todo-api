@@ -11,11 +11,11 @@ import (
 	"fmt"           // fmt = format package - for printing text and formatting strings
 	"log"           // log = logging package - for writing messages to the console
 	"net/http"      // net/http = HTTP package - for creating web servers (like Express.js)
-	"os"            // os = operating system package - for accessing environment variables and system functions │
+	"os"            // os = operating system package - for accessing environment variables and system functions
 	"time"          // time = time package - for handling time-related operations
 
-	// External packages
-	"github.com/joho/godotenv" // godotenv = package for loading .env files
+	// Third-party packages
+	"github.com/joho/godotenv" // godotenv = package for loading .env files (like dotenv in Node.js)
 
 	// MongoDB packages - from the official MongoDB Go driver
 	"go.mongodb.org/mongo-driver/bson"           // bson = Binary JSON - MongoDB's data format
@@ -45,11 +45,12 @@ var (
 // In Go, init() functions are called automatically when the package is loaded
 func init() {
 	// Load environment variables from .env file
-	// godotenv.Load() reads the .env file in the current directory and loads those variables
-	// This allows us to store sensitive data like connection strings in a file that's not committed to git
-	if err := godotenv.Load(); err != nil {
-		// If .env file doesn't exist, that's okay - we can still use system environment variables
-		log.Println("No .env file found, using system environment variables")
+	// godotenv.Load() reads the .env file and sets environment variables
+	// If the .env file doesn't exist, it will silently fail (optional for production)
+	err := godotenv.Load()
+	if err != nil {
+		// If .env file doesn't exist, that's okay - environment variables might be set another way
+		log.Println("No .env file found - using environment variables or defaults")
 	}
 
 	// Create a context with a 10-second timeout
@@ -60,11 +61,12 @@ func init() {
 	defer cancel() // defer ensures this cleanup function runs when init() exits
 
 	// Get MongoDB connection string from environment variable
-	// os.Getenv() reads environment variables - first from .env file, then from system
+	// os.Getenv() reads environment variables from .env file or system environment
+	// This keeps your connection string secret and out of version control
 	mongoURI := os.Getenv("MONGO_URI")
-	if mongoURI == "" || mongoURI == "YOUR_CONNECTION_STRING_HERE" {
-		// If no connection string is set, show an error and exit
-		log.Fatal("MONGO_URI not set! Please create a .env file with your MongoDB connection string. See .env.example for format.")
+	if mongoURI == "" {
+		// If MONGO_URI is not set in .env or environment variables, exit with error
+		log.Fatal("MONGO_URI not found. Please set it in your .env file. See .env.example for template.")
 	}
 
 	// Create a new MongoDB client

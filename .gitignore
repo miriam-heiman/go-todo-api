@@ -32,6 +32,5 @@ main
 .DS_Store
 Thumbs.db
 
-# Environment files
+# Environment variables (don't commit secrets!)
 .env
-
