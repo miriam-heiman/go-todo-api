@@ -1,6 +1,6 @@
 # Go To-Do REST API
 
-A simple REST API built with Go to learn the language. This project demonstrates building a CRUD API with in-memory storage.
+A simple REST API built with Go to learn the language. This project demonstrates building a CRUD API with MongoDB database.
 
 ## 🚀 Features
 
@@ -8,7 +8,7 @@ A simple REST API built with Go to learn the language. This project demonstrates
 - **CRUD Operations** - Create, Read, Update, Delete tasks
 - **JSON API** - Returns data in JSON format
 - **Error Handling** - Proper HTTP status codes
-- **In-Memory Storage** - Tasks stored in Go slices
+- **MongoDB Integration** - Cloud database storage with MongoDB Atlas
 
 ## 📦 Installation
 
@@ -23,7 +23,16 @@ A simple REST API built with Go to learn the language. This project demonstrates
    cd go-todo-api
    ```
 
-3. Run the server:
+3. Set up environment variables:
+   ```bash
+   # Copy the example file
+   cp .env.example .env
+   
+   # Edit .env and add your MongoDB connection string
+   # Get it from: https://cloud.mongodb.com
+   ```
+
+4. Run the server:
    ```bash
    go run main.go
    ```
