@@ -6,13 +6,13 @@ package main
 // import - This is how you bring in code from other packages (like importing in JavaScript or Python)
 // The parentheses create a "block" where you list all the imports
 import (
-	"context"        // context = context package - used for cancellation and timeouts in Go
-	"encoding/json"  // encoding/json = JSON package - for converting Go data structures to/from JSON
-	"fmt"            // fmt = format package - for printing text and formatting strings
-	"log"            // log = logging package - for writing messages to the console
-	"net/http"       // net/http = HTTP package - for creating web servers (like Express.js)
-	"os"             // os = operating system package - for accessing environment variables and system functions
-	"time"           // time = time package - for handling time-related operations
+	"context"       // context = context package - used for cancellation and timeouts in Go
+	"encoding/json" // encoding/json = JSON package - for converting Go data structures to/from JSON
+	"fmt"           // fmt = format package - for printing text and formatting strings
+	"log"           // log = logging package - for writing messages to the console
+	"net/http"      // net/http = HTTP package - for creating web servers (like Express.js)
+	"os"            // os = operating system package - for accessing environment variables and system functions
+	"time"          // time = time package - for handling time-related operations
 
 	// MongoDB packages - from the official MongoDB Go driver
 	"go.mongodb.org/mongo-driver/bson"           // bson = Binary JSON - MongoDB's data format
@@ -26,16 +26,16 @@ import (
 // Think of it as defining a template: "Every Task must have these exact fields"
 type Task struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"` // MongoDB's ObjectID type for unique IDs, bson tag tells MongoDB how to store it
-	Title       string             `json:"title"`                    // Title field of type string (text), json tag says use "title" in JSON
-	Description string             `json:"description"`              // Description field of type string, json tag says use "description" in JSON
-	Completed   bool               `json:"completed"`                // Completed field of type bool (boolean: true or false), json tag says use "completed" in JSON
+	Title       string             `json:"title"`                   // Title field of type string (text), json tag says use "title" in JSON
+	Description string             `json:"description"`             // Description field of type string, json tag says use "description" in JSON
+	Completed   bool               `json:"completed"`               // Completed field of type bool (boolean: true or false), json tag says use "completed" in JSON
 }
 
 // MongoDB connection variables - these will hold our database connection
 var (
-	client     *mongo.Client              // client = MongoDB client connection
-	collection *mongo.Collection          // collection = reference to our tasks collection in the database
-	ctx        context.Context            // ctx = context for database operations (handles timeouts and cancellation)
+	client     *mongo.Client     // client = MongoDB client connection
+	collection *mongo.Collection // collection = reference to our tasks collection in the database
+	ctx        context.Context   // ctx = context for database operations (handles timeouts and cancellation)
 )
 
 // init() - This special function runs AUTOMATICALLY before main() - it's for setup/initialization
