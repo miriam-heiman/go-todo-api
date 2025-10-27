@@ -1,6 +1,6 @@
 # Go To-Do REST API
 
-A simple REST API built with Go to learn the language. This project demonstrates building a CRUD API with in-memory storage.
+A simple REST API built with Go to learn the language. This project demonstrates building a production-ready CRUD API with MongoDB database storage.
 
 ## 🚀 Features
 
@@ -8,7 +8,8 @@ A simple REST API built with Go to learn the language. This project demonstrates
 - **CRUD Operations** - Create, Read, Update, Delete tasks
 - **JSON API** - Returns data in JSON format
 - **Error Handling** - Proper HTTP status codes
-- **In-Memory Storage** - Tasks stored in Go slices
+- **MongoDB Integration** - Persistent cloud database storage
+- **Environment Variables** - Secure credential management with .env files
 
 ## 📦 Installation
 
@@ -23,7 +24,16 @@ A simple REST API built with Go to learn the language. This project demonstrates
    cd go-todo-api
    ```
 
-3. Run the server:
+3. Set up environment variables:
+   ```bash
+   # Copy the example .env file
+   cp .env.example .env
+   
+   # Edit .env and add your MongoDB connection string
+   # Get it from MongoDB Atlas: https://www.mongodb.com/cloud/atlas
+   ```
+
+4. Run the server:
    ```bash
    go run main.go
    ```
@@ -87,6 +97,8 @@ Check out the `Learning files/` directory for detailed explanations:
 - **Go** - Programming language
 - **net/http** - HTTP server and client
 - **encoding/json** - JSON encoding/decoding
+- **MongoDB** - Database for persistent storage
+- **godotenv** - Environment variable management
 - **strconv** - String conversion utilities
 
 ## 📝 Project Structure
@@ -96,6 +108,8 @@ go-todo-api/
 ├── main.go              # Main application code
 ├── go.mod               # Go module dependencies
 ├── go.sum               # Dependency checksums
+├── .env                 # Environment variables (gitignored)
+├── .env.example         # Example environment file
 ├── README.md            # This file
 └── Learning files/      # Learning resources
     ├── CODE_STRUCTURE.md
@@ -119,7 +133,8 @@ This project taught me:
 
 ## 🔮 Future Improvements
 
-- [ ] Add MongoDB for persistent storage
+- [x] Add MongoDB for persistent storage
+- [x] Add environment variable support
 - [ ] Add user authentication
 - [ ] Add task categories/tags
 - [ ] Add due dates
