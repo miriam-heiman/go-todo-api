@@ -6,50 +6,90 @@ package main
 // import - This is how you bring in code from other packages (like importing in JavaScript or Python)
 // The parentheses create a "block" where you list all the imports
 import (
-	"encoding/json" // encoding/json = JSON package - for converting Go data structures to/from JSON
-	"fmt"           // fmt = format package - for printing text and formatting strings
-	"log"           // log = logging package - for writing messages to the console
-	"net/http"      // net/http = HTTP package - for creating web servers (like Express.js)
-	"strconv"       // strconv = string conversion package - for converting strings to numbers and vice versa
+	"context"        // context = context package - used for cancellation and timeouts in Go
+	"encoding/json"  // encoding/json = JSON package - for converting Go data structures to/from JSON
+	"fmt"            // fmt = format package - for printing text and formatting strings
+	"log"            // log = logging package - for writing messages to the console
+	"net/http"       // net/http = HTTP package - for creating web servers (like Express.js)
+	"os"             // os = operating system package - for accessing environment variables and system functions
+	"time"           // time = time package - for handling time-related operations
+
+	// MongoDB packages - from the official MongoDB Go driver
+	"go.mongodb.org/mongo-driver/bson"           // bson = Binary JSON - MongoDB's data format
+	"go.mongodb.org/mongo-driver/bson/primitive" // primitive = MongoDB primitive types like ObjectID
+	"go.mongodb.org/mongo-driver/mongo"          // mongo = Main MongoDB driver package
+	"go.mongodb.org/mongo-driver/mongo/options"  // options = Configuration options for MongoDB operations
 )
 
 // type Task struct - This creates a custom data type called "Task"
 // "struct" is Go's way of grouping related data together (like a class without methods, or a JavaScript object with a fixed shape)
 // Think of it as defining a template: "Every Task must have these exact fields"
 type Task struct {
-	ID          int    `json:"id"`          // ID field of type int (integer/number), json tag tells Go to use "id" when converting to JSON
-	Title       string `json:"title"`       // Title field of type string (text), json tag says use "title" in JSON
-	Description string `json:"description"` // Description field of type string, json tag says use "description" in JSON
-	Completed   bool   `json:"completed"`   // Completed field of type bool (boolean: true or false), json tag says use "completed" in JSON
+	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id"` // MongoDB's ObjectID type for unique IDs, bson tag tells MongoDB how to store it
+	Title       string             `json:"title"`                    // Title field of type string (text), json tag says use "title" in JSON
+	Description string             `json:"description"`              // Description field of type string, json tag says use "description" in JSON
+	Completed   bool               `json:"completed"`                // Completed field of type bool (boolean: true or false), json tag says use "completed" in JSON
 }
 
-// var tasks []Task - Declares a variable called "tasks"
-// []Task means "a slice of Task" - think of it as an array or list that can grow/shrink
-// It starts empty - we can add Task objects to it
-var tasks []Task
+// MongoDB connection variables - these will hold our database connection
+var (
+	client     *mongo.Client              // client = MongoDB client connection
+	collection *mongo.Collection          // collection = reference to our tasks collection in the database
+	ctx        context.Context            // ctx = context for database operations (handles timeouts and cancellation)
+)
 
-// var nextID = 1 - Declares a variable called nextID and sets it to 1
-// We'll use this to give each new task a unique ID number
-var nextID = 1
+// init() - This special function runs AUTOMATICALLY before main() - it's for setup/initialization
+// In Go, init() functions are called automatically when the package is loaded
+func init() {
+	// Create a context with a 10-second timeout
+	// context.Background() creates the root context, context.WithTimeout adds a timeout
+	// This ensures database operations don't hang forever if something goes wrong
+	var cancel context.CancelFunc
+	ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel() // defer ensures this cleanup function runs when init() exits
+
+	// Get MongoDB connection string from environment variable, or use default
+	// os.Getenv() reads environment variables (useful for production deployments)
+	// If MONGO_URI isn't set, use the default local MongoDB URI
+	mongoURI := os.Getenv("MONGO_URI")
+	if mongoURI == "" {
+		// DEFAULT: Replace this with your MongoDB Atlas connection string!
+		// Get it from MongoDB Atlas dashboard → Connect → Copy connection string
+		mongoURI = "YOUR_CONNECTION_STRING_HERE"
+	}
+
+	// Create a new MongoDB client
+	// clientOptions.New() creates a configuration object for the MongoDB client
+	clientOptions := options.Client().ApplyURI(mongoURI)
+
+	// Connect to MongoDB
+	// mongo.Connect() establishes connection to the MongoDB server
+	var err error
+	client, err = mongo.Connect(ctx, clientOptions)
+
+	// Check if connection failed
+	if err != nil {
+		log.Fatal("Failed to connect to MongoDB:", err) // log.Fatal prints error and exits program
+	}
+
+	// Ping the MongoDB server to verify connection
+	// This ensures the connection is actually working
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		log.Fatal("Failed to ping MongoDB:", err)
+	}
+
+	// Select the database and collection
+	// Database name: "todoapi", Collection name: "tasks"
+	collection = client.Database("todoapi").Collection("tasks")
+
+	fmt.Println("✅ Connected to MongoDB!")
+}
 
 // func main() - This is THE main function that runs when you start your program
 // It's like the entry point - Go automatically calls this function when you run your program
 // The empty () means it takes no parameters
 func main() {
-	// tasks = append(tasks, Task{...}) - This adds a new Task to our tasks list
-	// append() adds an item to the end of a slice (like push() in JavaScript arrays)
-	// Task{...} creates a new Task object (called a "struct literal")
-	// Inside the braces, we're setting each field using "FieldName: value" syntax
-	tasks = append(tasks, Task{
-		ID:          1,                               // Set ID field to 1
-		Title:       "Learn Go Basics",               // Set Title to this text
-		Description: "Understand Go's main concepts", // Set Description to this text
-		Completed:   false,                           // Set Completed to false (not done yet)
-	})
-
-	// nextID = 2 - Set the nextID counter to 2 since we just used ID 1
-	nextID = 2
-
 	// http.HandleFunc() - This tells the server "when someone visits this URL, run this function"
 	// It maps URL paths to handler functions
 	// The first parameter is the URL path (like "/" for homepage)
@@ -93,7 +133,8 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	// This means we can write multi-line HTML and it preserves the formatting
 	fmt.Fprintf(w, `
 		<h1>Welcome to my Go To-Do API!</h1>
-		<p>This is running on a Go HTTP server!</p>
+		<p>Now powered by MongoDB!</p>
+		<p>Your tasks are now saved in the cloud 💾</p>
 		<h2>Available endpoints:</h2>
 		<ul>
 			<li><a href="/tasks">GET /tasks</a> - Get all tasks</li>
@@ -115,7 +156,7 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 
 	// fmt.Fprintf(w, ...) - Write a JSON string directly to the response
 	// The backtick creates a raw string literal containing JSON
-	fmt.Fprintf(w, `{"status": "healthy", "message": "Server is running!"}`)
+	fmt.Fprintf(w, `{"status": "healthy", "message": "Server is running with MongoDB!"}`)
 }
 
 // func tasksHandler(...) - This function handles requests to the /tasks endpoint
@@ -130,20 +171,21 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 
 	// case "GET" - Handle requests to read/fetch tasks
 	case "GET":
-		// Check if an ID parameter was provided in the URL query (like ?id=1)
+		// Check if an ID parameter was provided in the URL query (like ?id=...)
 		// r.URL.Query() gets the query parameters from the URL
 		idParam := r.URL.Query().Get("id") // Get the value of the "id" parameter, or "" if not present
 
 		// if idParam == "" - If no ID was provided, return all tasks
 		if idParam == "" {
-			// Call a helper function to get and return all tasks
+			// Call a helper function to get and return all tasks from MongoDB
 			getAllTasksHandler(w)
 		} else {
-			// strconv.Atoi(idParam) - Convert the ID parameter from string to integer
-			// Atoi returns TWO values: the integer and an error (this is Go's way of error handling)
-			id, err := strconv.Atoi(idParam)
+			// Convert MongoDB ObjectID from string
+			// primitive.ObjectIDFromHex() converts a string to MongoDB ObjectID
+			// This returns TWO values: the ObjectID and an error (this is Go's way of error handling)
+			objectID, err := primitive.ObjectIDFromHex(idParam)
 
-			// if err != nil - If there was an error converting the ID (like if it's not a number)
+			// if err != nil - If there was an error converting the ID
 			if err != nil {
 				// http.Error() - Send an error response back to the client
 				// Status 400 means "Bad Request" (the client sent invalid data)
@@ -151,8 +193,8 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 				return // Exit the function early
 			}
 
-			// Call a helper function to get and return a specific task by ID
-			getTaskByIDHandler(w, id)
+			// Call a helper function to get and return a specific task by ID from MongoDB
+			getTaskByIDHandler(w, objectID)
 		}
 
 	// case "POST" - Handle requests to create a new task
@@ -174,46 +216,74 @@ func tasksHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func getAllTasksHandler(...) - Helper function to get and return all tasks
+// func getAllTasksHandler(...) - Helper function to get and return all tasks from MongoDB
 func getAllTasksHandler(w http.ResponseWriter) {
-	// json.NewEncoder(w) - Create a JSON encoder that writes to the response writer
-	// .Encode(tasks) - Convert our tasks slice to JSON and write it to the response
-	// If anything goes wrong, Encode returns an error
-	err := json.NewEncoder(w).Encode(tasks)
+	// Create a context with 5-second timeout for this specific operation
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel() // Cleanup when function exits
 
-	// if err != nil - Check if encoding failed
+	// collection.Find() - Query MongoDB for all documents in the collection
+	// The first parameter is a filter (nil = no filter, get all documents)
+	// The second parameter is the cursor (placeholder for results)
+	cursor, err := collection.Find(ctx, bson.M{})
+
+	// if err != nil - Check if query failed
 	if err != nil {
-		// http.Error() - Send an error response back to the client
-		// Status 500 means "Internal Server Error" (something went wrong on our end)
-		http.Error(w, "Failed to encode tasks", http.StatusInternalServerError)
+		http.Error(w, "Failed to fetch tasks from database", http.StatusInternalServerError)
+		return
+	}
+	defer cursor.Close(ctx) // Make sure to close the cursor when done
+
+	// Create a slice to hold all tasks
+	var tasks []Task
+
+	// cursor.All() - Read all results from the cursor into our tasks slice
+	// This automatically iterates through all documents in the cursor
+	err = cursor.All(ctx, &tasks)
+
+	// if err != nil - Check if reading results failed
+	if err != nil {
+		http.Error(w, "Failed to decode tasks", http.StatusInternalServerError)
 		return
 	}
 
-	// fmt.Println() - Print a success message to the console
-	fmt.Println("✅ Retrieved all tasks")
+	// json.NewEncoder(w).Encode(tasks) - Convert tasks slice to JSON and send to client
+	json.NewEncoder(w).Encode(tasks)
+
+	// fmt.Println() - Print success message to console
+	fmt.Printf("✅ Retrieved %d tasks from MongoDB\n", len(tasks))
 }
 
-// func getTaskByIDHandler(...) - Helper function to get a specific task by its ID
-func getTaskByIDHandler(w http.ResponseWriter, id int) {
-	// Loop through all tasks to find one with a matching ID
-	// for range - This is Go's way of looping through a slice (like forEach in JavaScript)
-	// _ means "ignore this value" (we don't need the index)
-	for _, task := range tasks {
-		// if task.ID == id - Check if this task's ID matches the one we're looking for
-		if task.ID == id {
-			// json.NewEncoder(w).Encode(task) - Convert this single task to JSON and send it
-			json.NewEncoder(w).Encode(task)
-			fmt.Printf("✅ Retrieved task with ID %d\n", id) // Print with the ID substituted in
-			return                                          // Exit the function since we found the task
+// func getTaskByIDHandler(...) - Helper function to get a specific task by its ID from MongoDB
+func getTaskByIDHandler(w http.ResponseWriter, objectID primitive.ObjectID) {
+	// Create a context with 5-second timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// collection.FindOne() - Find a single document matching the filter
+	// bson.M{"_id": objectID} creates a filter that matches documents with this specific ID
+	// Result is stored in a single Result object
+	var task Task
+	err := collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&task)
+
+	// if err != nil - Check if task not found or other error
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			// Task doesn't exist in database
+			http.Error(w, "Task not found", http.StatusNotFound)
+		} else {
+			// Some other error occurred
+			http.Error(w, "Failed to fetch task", http.StatusInternalServerError)
 		}
+		return
 	}
 
-	// If we got here, the task wasn't found
-	// http.Error() - Send a "404 Not Found" error
-	http.Error(w, "Task not found", http.StatusNotFound)
+	// Convert task to JSON and send to client
+	json.NewEncoder(w).Encode(task)
+	fmt.Printf("✅ Retrieved task with ID %s\n", objectID.Hex())
 }
 
-// func createTaskHandler(...) - Helper function to create a new task
+// func createTaskHandler(...) - Helper function to create a new task in MongoDB
 func createTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// Declare a variable to hold the incoming task data
 	var newTask Task
@@ -236,23 +306,34 @@ func createTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Assign the next available ID to this new task
-	// We use nextID global variable and then increment it for the next task
-	newTask.ID = nextID
-	nextID++ // Increment for next time
-
 	// Set completed to false by default if not specified
 	newTask.Completed = false
 
-	// tasks = append(tasks, newTask) - Add the new task to our tasks slice
-	tasks = append(tasks, newTask)
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	// json.NewEncoder(w).Encode(newTask) - Successfully return the created task as JSON
+	// collection.InsertOne() - Insert a new document into the MongoDB collection
+	// This automatically generates a new ObjectID for the document
+	// The result contains information about the inserted document (including its new ID)
+	result, err := collection.InsertOne(ctx, newTask)
+
+	// if err != nil - Check if insert failed
+	if err != nil {
+		http.Error(w, "Failed to create task in database", http.StatusInternalServerError)
+		return
+	}
+
+	// Get the auto-generated ID from the insert result
+	// result.InsertedID returns the ID that MongoDB generated for our document
+	newTask.ID = result.InsertedID.(primitive.ObjectID) // Type assertion: "this is an ObjectID"
+
+	// Return the created task as JSON with its new ID
 	json.NewEncoder(w).Encode(newTask)
-	fmt.Printf("✅ Created new task: %s\n", newTask.Title)
+	fmt.Printf("✅ Created new task: %s with ID %s\n", newTask.Title, newTask.ID.Hex())
 }
 
-// func updateTaskHandler(...) - Helper function to update an existing task
+// func updateTaskHandler(...) - Helper function to update an existing task in MongoDB
 func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the ID parameter from the URL query
 	idParam := r.URL.Query().Get("id")
@@ -263,8 +344,8 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert ID from string to integer
-	id, err := strconv.Atoi(idParam)
+	// Convert ID from string to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
@@ -280,38 +361,57 @@ func updateTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Loop through tasks to find the one to update
-	// We need the index (i) this time so we can modify the task in place
-	for i, task := range tasks {
-		if task.ID == id {
-			// Keep the original ID
-			updatedTask.ID = id
+	// Create context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-			// If title is provided, update it; otherwise keep the old title
-			if updatedTask.Title == "" {
-				updatedTask.Title = task.Title
-			}
-
-			// If description is provided, update it; otherwise keep the old one
-			if updatedTask.Description == "" {
-				updatedTask.Description = task.Description
-			}
-
-			// Replace the task at index i with the updated version
-			tasks[i] = updatedTask
-
-			// Return the updated task as JSON
-			json.NewEncoder(w).Encode(updatedTask)
-			fmt.Printf("✅ Updated task with ID %d\n", id)
-			return
+	// First, find the existing task to preserve fields that weren't provided in update
+	var existingTask Task
+	err = collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&existingTask)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			http.Error(w, "Task not found", http.StatusNotFound)
+		} else {
+			http.Error(w, "Failed to fetch task", http.StatusInternalServerError)
 		}
+		return
 	}
 
-	// Task wasn't found
-	http.Error(w, "Task not found", http.StatusNotFound)
+	// Update fields if provided in the request, otherwise keep existing values
+	update := bson.M{
+		"$set": bson.M{
+			"title":     updatedTask.Title,
+			"completed": updatedTask.Completed,
+		},
+	}
+
+	// If title is empty in update, keep the existing title
+	if updatedTask.Title == "" {
+		update["$set"].(bson.M)["title"] = existingTask.Title
+	}
+
+	// Update the task in MongoDB
+	// collection.UpdateOne() updates a single document
+	result, err := collection.UpdateOne(ctx, bson.M{"_id": objectID}, update)
+	if err != nil {
+		http.Error(w, "Failed to update task", http.StatusInternalServerError)
+		return
+	}
+
+	// Check if task was actually updated
+	if result.MatchedCount == 0 {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	// Fetch and return the updated task
+	collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&updatedTask)
+	updatedTask.ID = objectID
+	json.NewEncoder(w).Encode(updatedTask)
+	fmt.Printf("✅ Updated task with ID %s\n", objectID.Hex())
 }
 
-// func deleteTaskHandler(...) - Helper function to delete a task
+// func deleteTaskHandler(...) - Helper function to delete a task from MongoDB
 func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 	// Get the ID parameter from the URL query
 	idParam := r.URL.Query().Get("id")
@@ -322,30 +422,32 @@ func deleteTaskHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Convert ID from string to integer
-	id, err := strconv.Atoi(idParam)
+	// Convert ID from string to ObjectID
+	objectID, err := primitive.ObjectIDFromHex(idParam)
 	if err != nil {
 		http.Error(w, "Invalid ID", http.StatusBadRequest)
 		return
 	}
 
-	// Loop through tasks to find the one to delete
-	// We need the index (i) to remove the task
-	for i, task := range tasks {
-		if task.ID == id {
-			// Delete the task from the slice using a trick:
-			// tasks[:i] gets all tasks before index i
-			// tasks[i+1:] gets all tasks after index i
-			// ... unpacks the second slice (syntax for appending multiple items)
-			tasks = append(tasks[:i], tasks[i+1:]...)
+	// Create context
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-			// Send a success response
-			fmt.Fprintf(w, `{"message": "Task deleted successfully"}`)
-			fmt.Printf("✅ Deleted task with ID %d\n", id)
-			return
-		}
+	// collection.DeleteOne() - Delete a single document matching the filter
+	// Returns information about the deletion (including how many documents were deleted)
+	result, err := collection.DeleteOne(ctx, bson.M{"_id": objectID})
+	if err != nil {
+		http.Error(w, "Failed to delete task", http.StatusInternalServerError)
+		return
 	}
 
-	// Task wasn't found
-	http.Error(w, "Task not found", http.StatusNotFound)
+	// Check if task was actually deleted
+	if result.DeletedCount == 0 {
+		http.Error(w, "Task not found", http.StatusNotFound)
+		return
+	}
+
+	// Send success response
+	fmt.Fprintf(w, `{"message": "Task deleted successfully", "id": "%s"}`, idParam)
+	fmt.Printf("✅ Deleted task with ID %s\n", objectID.Hex())
 }
