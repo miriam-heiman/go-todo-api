@@ -47,8 +47,7 @@ func init() {
 	// Load environment variables from .env file
 	// godotenv.Load() reads the .env file and sets environment variables
 	// If the .env file doesn't exist, it will silently fail (optional for production)
-	err := godotenv.Load()
-	if err != nil {
+	if err := godotenv.Load(); err != nil {
 		// If .env file doesn't exist, that's okay - environment variables might be set another way
 		log.Println("No .env file found - using environment variables or defaults")
 	}
