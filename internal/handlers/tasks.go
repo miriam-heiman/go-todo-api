@@ -2,230 +2,178 @@ package handlers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"time"
 
 	"go-todo-api/internal/database"
 	"go-todo-api/internal/models"
 
+	"github.com/danielgtaylor/huma/v2"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// Tasks handles requests to the /tasks endpoint
-// It routes different HTTP methods to appropriate handlers
-func Tasks(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-
-	switch r.Method {
-	case "GET":
-		// Check if an ID parameter was provided in the URL query
-		idParam := r.URL.Query().Get("id")
-
-		if idParam == "" {
-			// Get all tasks
-			GetAllTasks(w, r)
-		} else {
-			// Get specific task by ID
-			GetTaskByID(w, r, idParam)
-		}
-
-	case "POST":
-		CreateTask(w, r)
-
-	case "PUT":
-		UpdateTask(w, r)
-
-	case "DELETE":
-		DeleteTask(w, r)
-
-	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
 // GetAllTasks retrieves all tasks from the database
-func GetAllTasks(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+func GetAllTasks(ctx context.Context, input *struct{}) (*models.GetTasksOutput, error) {
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := database.GetCollection()
-	cursor, err := collection.Find(ctx, bson.M{})
+	cursor, err := collection.Find(dbCtx, bson.M{})
 	if err != nil {
-		http.Error(w, "Failed to fetch tasks from database", http.StatusInternalServerError)
-		return
+		return nil, huma.Error500InternalServerError("Failed to fetch tasks from database")
 	}
-	defer cursor.Close(ctx)
+	defer cursor.Close(dbCtx)
 
 	var tasks []models.Task
-	if err = cursor.All(ctx, &tasks); err != nil {
-		http.Error(w, "Failed to decode tasks", http.StatusInternalServerError)
-		return
+	if err = cursor.All(dbCtx, &tasks); err != nil {
+		return nil, huma.Error500InternalServerError("Failed to decode tasks")
 	}
 
-	json.NewEncoder(w).Encode(tasks)
+	// Initialize empty array instead of null if no tasks
+	if tasks == nil {
+		tasks = []models.Task{}
+	}
+
 	fmt.Printf("✅ Retrieved %d tasks from MongoDB\n", len(tasks))
+	return &models.GetTasksOutput{Body: tasks}, nil
 }
 
 // GetTaskByID retrieves a specific task by its ID
-func GetTaskByID(w http.ResponseWriter, r *http.Request, idParam string) {
-	objectID, err := primitive.ObjectIDFromHex(idParam)
+func GetTaskByID(ctx context.Context, input *models.GetTaskInput) (*models.GetTaskOutput, error) {
+	objectID, err := primitive.ObjectIDFromHex(input.ID)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+		return nil, huma.Error400BadRequest("Invalid task ID format")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	var task models.Task
 	collection := database.GetCollection()
-	err = collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&task)
+	err = collection.FindOne(dbCtx, bson.M{"_id": objectID}).Decode(&task)
 
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Task not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Failed to fetch task", http.StatusInternalServerError)
+			return nil, huma.Error404NotFound("Task not found")
 		}
-		return
+		return nil, huma.Error500InternalServerError("Failed to fetch task")
 	}
 
-	json.NewEncoder(w).Encode(task)
 	fmt.Printf("✅ Retrieved task with ID %s\n", objectID.Hex())
+	return &models.GetTaskOutput{Body: task}, nil
 }
 
 // CreateTask creates a new task in the database
-func CreateTask(w http.ResponseWriter, r *http.Request) {
-	var newTask models.Task
-
-	if err := json.NewDecoder(r.Body).Decode(&newTask); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
+func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.CreateTaskOutput, error) {
+	newTask := models.Task{
+		Title:       input.Body.Title,
+		Description: input.Body.Description,
+		Completed:   false,
 	}
 
-	if newTask.Title == "" {
-		http.Error(w, "Title is required", http.StatusBadRequest)
-		return
-	}
-
-	newTask.Completed = false
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := database.GetCollection()
-	result, err := collection.InsertOne(ctx, newTask)
+	result, err := collection.InsertOne(dbCtx, newTask)
 	if err != nil {
-		http.Error(w, "Failed to create task in database", http.StatusInternalServerError)
-		return
+		return nil, huma.Error500InternalServerError("Failed to create task in database")
 	}
 
 	newTask.ID = result.InsertedID.(primitive.ObjectID)
-	json.NewEncoder(w).Encode(newTask)
 	fmt.Printf("✅ Created new task: %s with ID %s\n", newTask.Title, newTask.ID.Hex())
+
+	return &models.CreateTaskOutput{Body: newTask}, nil
 }
 
 // UpdateTask updates an existing task in the database
-func UpdateTask(w http.ResponseWriter, r *http.Request) {
-	idParam := r.URL.Query().Get("id")
-	if idParam == "" {
-		http.Error(w, "ID is required", http.StatusBadRequest)
-		return
-	}
-
-	objectID, err := primitive.ObjectIDFromHex(idParam)
+func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.UpdateTaskOutput, error) {
+	objectID, err := primitive.ObjectIDFromHex(input.ID)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+		return nil, huma.Error400BadRequest("Invalid task ID format")
 	}
 
-	var updatedTask models.Task
-	if err := json.NewDecoder(r.Body).Decode(&updatedTask); err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
-		return
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := database.GetCollection()
 
 	// Find existing task first
 	var existingTask models.Task
-	err = collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&existingTask)
+	err = collection.FindOne(dbCtx, bson.M{"_id": objectID}).Decode(&existingTask)
 	if err != nil {
 		if err == mongo.ErrNoDocuments {
-			http.Error(w, "Task not found", http.StatusNotFound)
-		} else {
-			http.Error(w, "Failed to fetch task", http.StatusInternalServerError)
+			return nil, huma.Error404NotFound("Task not found")
 		}
-		return
+		return nil, huma.Error500InternalServerError("Failed to fetch task")
 	}
 
-	// Update fields
-	update := bson.M{
-		"$set": bson.M{
-			"title":     updatedTask.Title,
-			"completed": updatedTask.Completed,
-		},
+	// Build update document with only provided fields
+	update := bson.M{"$set": bson.M{}}
+
+	if input.Body.Title != nil {
+		update["$set"].(bson.M)["title"] = *input.Body.Title
+	}
+	if input.Body.Description != nil {
+		update["$set"].(bson.M)["description"] = *input.Body.Description
+	}
+	if input.Body.Completed != nil {
+		update["$set"].(bson.M)["completed"] = *input.Body.Completed
 	}
 
-	// If title is empty in update, keep the existing title
-	if updatedTask.Title == "" {
-		update["$set"].(bson.M)["title"] = existingTask.Title
+	// Only update if there are fields to update
+	if len(update["$set"].(bson.M)) == 0 {
+		return nil, huma.Error400BadRequest("No fields to update")
 	}
 
-	result, err := collection.UpdateOne(ctx, bson.M{"_id": objectID}, update)
+	result, err := collection.UpdateOne(dbCtx, bson.M{"_id": objectID}, update)
 	if err != nil {
-		http.Error(w, "Failed to update task", http.StatusInternalServerError)
-		return
+		return nil, huma.Error500InternalServerError("Failed to update task")
 	}
 
 	if result.MatchedCount == 0 {
-		http.Error(w, "Task not found", http.StatusNotFound)
-		return
+		return nil, huma.Error404NotFound("Task not found")
 	}
 
 	// Fetch and return the updated task
-	collection.FindOne(ctx, bson.M{"_id": objectID}).Decode(&updatedTask)
-	updatedTask.ID = objectID
-	json.NewEncoder(w).Encode(updatedTask)
+	var updatedTask models.Task
+	collection.FindOne(dbCtx, bson.M{"_id": objectID}).Decode(&updatedTask)
+
 	fmt.Printf("✅ Updated task with ID %s\n", objectID.Hex())
+	return &models.UpdateTaskOutput{Body: updatedTask}, nil
 }
 
 // DeleteTask deletes a task from the database
-func DeleteTask(w http.ResponseWriter, r *http.Request) {
-	idParam := r.URL.Query().Get("id")
-	if idParam == "" {
-		http.Error(w, "ID is required", http.StatusBadRequest)
-		return
-	}
-
-	objectID, err := primitive.ObjectIDFromHex(idParam)
+func DeleteTask(ctx context.Context, input *models.DeleteTaskInput) (*models.DeleteTaskOutput, error) {
+	objectID, err := primitive.ObjectIDFromHex(input.ID)
 	if err != nil {
-		http.Error(w, "Invalid ID", http.StatusBadRequest)
-		return
+		return nil, huma.Error400BadRequest("Invalid task ID format")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	collection := database.GetCollection()
-	result, err := collection.DeleteOne(ctx, bson.M{"_id": objectID})
+	result, err := collection.DeleteOne(dbCtx, bson.M{"_id": objectID})
 	if err != nil {
-		http.Error(w, "Failed to delete task", http.StatusInternalServerError)
-		return
+		return nil, huma.Error500InternalServerError("Failed to delete task")
 	}
 
 	if result.DeletedCount == 0 {
-		http.Error(w, "Task not found", http.StatusNotFound)
-		return
+		return nil, huma.Error404NotFound("Task not found")
 	}
 
-	fmt.Fprintf(w, `{"message": "Task deleted successfully", "id": "%s"}`, idParam)
 	fmt.Printf("✅ Deleted task with ID %s\n", objectID.Hex())
+
+	return &models.DeleteTaskOutput{
+		Body: struct {
+			Message string `json:"message" doc:"Success message"`
+			ID      string `json:"id" doc:"Deleted task ID"`
+		}{
+			Message: "Task deleted successfully",
+			ID:      input.ID,
+		},
+	}, nil
 }

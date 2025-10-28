@@ -20,3 +20,8 @@ func Logging(next http.Handler) http.Handler {
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
 	})
 }
+
+// LoggingChi is the Chi-compatible middleware version
+func LoggingChi(next http.Handler) http.Handler {
+	return Logging(next)
+}

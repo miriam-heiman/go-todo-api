@@ -23,3 +23,8 @@ func CORS(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// CORSChi is the Chi-compatible middleware version
+func CORSChi(next http.Handler) http.Handler {
+	return CORS(next)
+}
