@@ -144,7 +144,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 		<h1>Welcome to my Go To-Do API!</h1>
 		<p>Now powered by MongoDB!</p>
-		<p>Your tasks are now saved in the cloud 💾</p>
+		<p>Your tasks are now saved in the cloud </p>
 		<h2>Available endpoints:</h2>
 		<ul>
 			<li><a href="/tasks">GET /tasks</a> - Get all tasks</li>

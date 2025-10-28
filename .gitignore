@@ -34,3 +34,7 @@ Thumbs.db
 
 # Environment variables (don't commit secrets!)
 .env
+
+# Air live-reload tool
+tmp/
+build-errors.log
