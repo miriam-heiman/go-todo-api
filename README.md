@@ -138,7 +138,6 @@ go-todo-api/
 │   ├── API_FILE_STRUCTURE.md
 │   ├── SUMMARY.md
 │   └── TESTING.md
-├── main.go                  # Deprecated (see cmd/api/main.go)
 ├── go.mod                   # Go module dependencies
 ├── go.sum                   # Dependency checksums
 ├── .env                     # Environment variables (gitignored)
