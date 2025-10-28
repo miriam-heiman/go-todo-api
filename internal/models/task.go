@@ -1,75 +1,298 @@
+// ============================================================================
+// PACKAGE DECLARATION
+// ============================================================================
+// Package models contains all the data structures (types/structs) for our API
+// Think of models as "blueprints" or "templates" for the data we work with
 package models
 
+// ============================================================================
+// IMPORTS
+// ============================================================================
 import "go.mongodb.org/mongo-driver/bson/primitive"
+// primitive.ObjectID = MongoDB's special ID type (24-character hex string)
+// Example: "6900d436e231fdbb964c3c1c"
 
-// Task represents a todo item in our application
+// ============================================================================
+// CORE DATA MODEL
+// ============================================================================
+
+// Task represents a single TODO item in our application
+// This is the main data structure - every task in the database has these fields
+//
+// In Go, we define a struct (structure) to group related data together
+// It's like a class in other languages, but simpler (no methods here, just data)
+//
+// The backticks after each field are "struct tags" - special metadata
+// They tell Go (and Huma/MongoDB) how to handle this field
 type Task struct {
-	ID          primitive.ObjectID `bson:"_id,omitempty" json:"id" doc:"Unique identifier for the task"`
-	Title       string             `json:"title" doc:"Title of the task" minLength:"1" maxLength:"200"`
-	Description string             `json:"description,omitempty" doc:"Detailed description of the task" maxLength:"1000"`
-	Completed   bool               `json:"completed" doc:"Whether the task is completed"`
+	// ID is the unique identifier for each task
+	// Type: primitive.ObjectID = MongoDB's special ID type
+	//
+	// Struct tags explained:
+	//   bson:"_id,omitempty" = MongoDB field name (_id) and omit if empty
+	//   json:"id"            = JSON field name (shows as "id" in API responses)
+	//   doc:"..."            = Description for OpenAPI documentation
+	ID primitive.ObjectID `bson:"_id,omitempty" json:"id" doc:"Unique identifier for the task"`
+
+	// Title is the name/summary of the task
+	// Type: string = text data
+	//
+	// Validation tags:
+	//   minLength:"1"   = Must be at least 1 character (can't be empty)
+	//   maxLength:"200" = Can't be longer than 200 characters
+	Title string `json:"title" doc:"Title of the task" minLength:"1" maxLength:"200"`
+
+	// Description is optional detailed information about the task
+	// Type: string = text data
+	//
+	// Note: "omitempty" in json tag means:
+	// If description is empty, don't include it in JSON response
+	// Response could be: {"id": "...", "title": "...", "completed": false}
+	// (notice description is missing - that's omitempty at work!)
+	Description string `json:"description,omitempty" doc:"Detailed description of the task" maxLength:"1000"`
+
+	// Completed tracks whether the task is done or not
+	// Type: bool = boolean (true or false)
+	// Defaults to false when created
+	Completed bool `json:"completed" doc:"Whether the task is completed"`
 }
 
-// CreateTaskInput is the input for creating a new task
+// ============================================================================
+// INPUT/OUTPUT TYPES FOR API OPERATIONS
+// ============================================================================
+// In Huma, every operation has:
+// - An INPUT type (what the client sends)
+// - An OUTPUT type (what we send back)
+//
+// This is different from tutorials where you just have one Task type!
+// Huma uses separate types for better validation and documentation
+
+// ----------------------------------------------------------------------------
+// CREATE TASK OPERATION
+// ----------------------------------------------------------------------------
+
+// CreateTaskInput defines what data the client must send to create a task
+// Used by: POST /tasks
+//
+// Example request:
+// POST /tasks
+// {
+//   "title": "Buy groceries",
+//   "description": "Buy milk, eggs, and bread"
+// }
 type CreateTaskInput struct {
+	// Body is a nested struct that contains the request body fields
+	// In Huma, you wrap the actual data in a "Body" field
 	Body struct {
-		Title       string `json:"title" doc:"Title of the task" minLength:"1" maxLength:"200" example:"Buy groceries"`
+		// Title is REQUIRED (no omitempty tag!)
+		// Validation: must be 1-200 characters
+		// example:"..." = shows in API docs as an example
+		Title string `json:"title" doc:"Title of the task" minLength:"1" maxLength:"200" example:"Buy groceries"`
+
+		// Description is OPTIONAL (has omitempty tag)
+		// If client doesn't send it, that's okay!
 		Description string `json:"description,omitempty" doc:"Detailed description" maxLength:"1000" example:"Buy milk, eggs, and bread"`
 	}
+	// Note: We don't include ID or Completed here!
+	// - ID is auto-generated by MongoDB
+	// - Completed defaults to false
 }
 
-// CreateTaskOutput is the response for creating a task
+// CreateTaskOutput defines what we send back after creating a task
+// Used by: POST /tasks
+//
+// Example response:
+// {
+//   "$schema": "http://localhost:8080/schemas/Task.json",
+//   "id": "6900d436e231fdbb964c3c1c",
+//   "title": "Buy groceries",
+//   "description": "Buy milk, eggs, and bread",
+//   "completed": false
+// }
 type CreateTaskOutput struct {
+	// Body contains the full Task object (with the new ID)
+	// Huma will automatically convert this to JSON
 	Body Task
 }
 
-// GetTasksOutput is the response for getting all tasks
+// ----------------------------------------------------------------------------
+// GET ALL TASKS OPERATION
+// ----------------------------------------------------------------------------
+
+// GetTasksOutput defines what we send when listing all tasks
+// Used by: GET /tasks
+//
+// Example response:
+// [
+//   {"id": "...", "title": "Task 1", "completed": false},
+//   {"id": "...", "title": "Task 2", "completed": true}
+// ]
 type GetTasksOutput struct {
+	// Body is an array (slice) of Task objects
+	// []Task means "a list of Tasks"
+	// If there are no tasks, this will be an empty array: []
 	Body []Task
 }
 
-// GetTaskInput is the input for getting a single task
+// ----------------------------------------------------------------------------
+// GET SINGLE TASK OPERATION
+// ----------------------------------------------------------------------------
+
+// GetTaskInput defines the URL parameter needed to get one task
+// Used by: GET /tasks/{id}
+//
+// Example request:
+// GET /tasks/6900d436e231fdbb964c3c1c
+//             └─ this becomes the ID field below
 type GetTaskInput struct {
+	// ID comes from the URL path (not the body!)
+	// path:"id" means this value comes from /tasks/{id}
+	//
+	// Validation: MongoDB IDs are always exactly 24 characters
 	ID string `path:"id" doc:"Task ID" minLength:"24" maxLength:"24"`
 }
 
-// GetTaskOutput is the response for getting a single task
+// GetTaskOutput defines what we send back for a single task
+// Used by: GET /tasks/{id}
+//
+// Example response:
+// {
+//   "id": "6900d436e231fdbb964c3c1c",
+//   "title": "Buy groceries",
+//   "description": "Buy milk, eggs, and bread",
+//   "completed": false
+// }
 type GetTaskOutput struct {
+	// Body contains one Task object
 	Body Task
 }
 
-// UpdateTaskInput is the input for updating a task
+// ----------------------------------------------------------------------------
+// UPDATE TASK OPERATION
+// ----------------------------------------------------------------------------
+
+// UpdateTaskInput defines what's needed to update a task
+// Used by: PUT /tasks/{id}
+//
+// Example request:
+// PUT /tasks/6900d436e231fdbb964c3c1c
+// {
+//   "completed": true
+// }
 type UpdateTaskInput struct {
-	ID   string `path:"id" doc:"Task ID" minLength:"24" maxLength:"24"`
+	// ID comes from the URL path
+	ID string `path:"id" doc:"Task ID" minLength:"24" maxLength:"24"`
+
+	// Body contains the fields to update
+	// IMPORTANT: These are POINTERS (*string, *bool)
+	// Why pointers? So we can tell the difference between:
+	// - Field not provided (pointer is nil)
+	// - Field provided but empty (pointer points to empty string)
+	//
+	// Example:
+	// If user sends {"completed": false}, we update completed
+	// If user sends {}, we don't update anything (all pointers are nil)
 	Body struct {
-		Title       *string `json:"title,omitempty" doc:"Title of the task" minLength:"1" maxLength:"200"`
+		// Title is optional - only update if provided
+		// *string means "pointer to string" (can be nil)
+		Title *string `json:"title,omitempty" doc:"Title of the task" minLength:"1" maxLength:"200"`
+
+		// Description is optional - only update if provided
 		Description *string `json:"description,omitempty" doc:"Detailed description" maxLength:"1000"`
-		Completed   *bool   `json:"completed,omitempty" doc:"Whether the task is completed"`
+
+		// Completed is optional - only update if provided
+		// *bool means "pointer to bool" (can be nil)
+		Completed *bool `json:"completed,omitempty" doc:"Whether the task is completed"`
 	}
 }
 
-// UpdateTaskOutput is the response for updating a task
+// UpdateTaskOutput defines what we send back after updating
+// Used by: PUT /tasks/{id}
+//
+// Example response: (the updated task)
+// {
+//   "id": "6900d436e231fdbb964c3c1c",
+//   "title": "Buy groceries",
+//   "description": "Buy milk, eggs, and bread",
+//   "completed": true  ← updated!
+// }
 type UpdateTaskOutput struct {
+	// Body contains the updated Task object
 	Body Task
 }
 
-// DeleteTaskInput is the input for deleting a task
+// ----------------------------------------------------------------------------
+// DELETE TASK OPERATION
+// ----------------------------------------------------------------------------
+
+// DeleteTaskInput defines what's needed to delete a task
+// Used by: DELETE /tasks/{id}
+//
+// Example request:
+// DELETE /tasks/6900d436e231fdbb964c3c1c
 type DeleteTaskInput struct {
+	// ID comes from the URL path
 	ID string `path:"id" doc:"Task ID" minLength:"24" maxLength:"24"`
 }
 
-// DeleteTaskOutput is the response for deleting a task
+// DeleteTaskOutput defines what we send back after deletion
+// Used by: DELETE /tasks/{id}
+//
+// Example response:
+// {
+//   "message": "Task deleted successfully",
+//   "id": "6900d436e231fdbb964c3c1c"
+// }
 type DeleteTaskOutput struct {
+	// Body is an anonymous struct (no name, defined inline)
+	// We use this when we only need the struct in one place
 	Body struct {
 		Message string `json:"message" doc:"Success message"`
 		ID      string `json:"id" doc:"Deleted task ID"`
 	}
 }
 
-// HealthOutput is the response for the health check
+// ----------------------------------------------------------------------------
+// HEALTH CHECK OPERATION
+// ----------------------------------------------------------------------------
+
+// HealthOutput defines the response for the health check endpoint
+// Used by: GET /health
+//
+// Example response:
+// {
+//   "status": "healthy",
+//   "message": "Server is running with MongoDB!"
+// }
 type HealthOutput struct {
+	// Body is an anonymous struct
 	Body struct {
 		Status  string `json:"status" doc:"Health status" example:"healthy"`
 		Message string `json:"message" doc:"Health message" example:"Server is running with MongoDB!"`
 	}
 }
+
+// ============================================================================
+// HOW THESE TYPES ARE USED
+// ============================================================================
+//
+// 1. You define types here (models package)
+// 2. Handlers use these types (handlers package)
+// 3. Huma uses these types to:
+//    - Validate incoming requests (checks minLength, maxLength, etc.)
+//    - Generate OpenAPI documentation (uses doc, example tags)
+//    - Encode/decode JSON automatically
+//    - Generate JSON schemas
+//
+// Example handler signature:
+// func CreateTask(ctx context.Context, input *CreateTaskInput) (*CreateTaskOutput, error)
+//                                            ↑ input type       ↑ output type
+//
+// Huma automatically:
+// - Reads request body and converts to CreateTaskInput
+// - Validates it (checks title is 1-200 chars)
+// - Calls your handler
+// - Takes CreateTaskOutput and converts to JSON
+// - Sends response to client
+//
+// ============================================================================
