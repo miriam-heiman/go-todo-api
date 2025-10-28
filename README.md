@@ -35,14 +35,22 @@ A simple REST API built with Go to learn the language. This project demonstrates
 
 4. Run the server:
    ```bash
-   go run main.go
+   # With hot-reload (recommended for development)
+   air
+
+   # Or manually
+   go run cmd/api/main.go
    ```
 
 ## 📖 Usage
 
 ### Start the Server
 ```bash
-go run main.go
+# With hot-reload (automatically restarts on code changes)
+air
+
+# Or manually
+go run cmd/api/main.go
 ```
 
 The server will start on `http://localhost:8080`
@@ -105,19 +113,44 @@ Check out the `Learning files/` directory for detailed explanations:
 
 ```
 go-todo-api/
-├── main.go              # Main application code
-├── go.mod               # Go module dependencies
-├── go.sum               # Dependency checksums
-├── .env                 # Environment variables (gitignored)
-├── .env.example         # Example environment file
-├── README.md            # This file
-└── Learning files/      # Learning resources
-    ├── CODE_STRUCTURE.md
-    ├── DEPENDENCIES.md
-    ├── MONGODB_SETUP.md
-    ├── SUMMARY.md
-    └── TESTING.md
+├── cmd/
+│   └── api/
+│       └── main.go          # Application entry point
+├── internal/                # Private application code
+│   ├── handlers/            # HTTP request handlers
+│   │   ├── home.go
+│   │   ├── health.go
+│   │   └── tasks.go
+│   ├── middleware/          # Middleware functions
+│   │   ├── logging.go
+│   │   ├── cors.go
+│   │   └── chain.go
+│   ├── models/              # Data structures
+│   │   └── task.go
+│   ├── database/            # Database connections
+│   │   └── mongo.go
+│   └── config/              # Configuration
+├── Learning files/          # Learning resources
+│   ├── CODE_STRUCTURE.md
+│   ├── DEPENDENCIES.md
+│   ├── MONGODB_SETUP.md
+│   ├── MIDDLEWARE_EXPLAINED.md
+│   ├── API_FILE_STRUCTURE.md
+│   ├── SUMMARY.md
+│   └── TESTING.md
+├── main.go                  # Deprecated (see cmd/api/main.go)
+├── go.mod                   # Go module dependencies
+├── go.sum                   # Dependency checksums
+├── .env                     # Environment variables (gitignored)
+├── .env.example             # Example environment file
+├── .air.toml                # Hot-reload configuration
+└── README.md                # This file
 ```
+
+**Production-Ready Structure:**
+- `cmd/` - Application entry points
+- `internal/` - Private application code (can't be imported by other projects)
+- Clean separation of concerns (handlers, models, middleware, database)
 
 ## 🎓 What I Learned
 
