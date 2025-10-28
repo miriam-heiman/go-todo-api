@@ -1,15 +1,19 @@
 # Go To-Do REST API
 
-A simple REST API built with Go to learn the language. This project demonstrates building a production-ready CRUD API with MongoDB database storage.
+A production-ready REST API built with Go using the Huma framework. This project demonstrates modern API development with automatic OpenAPI documentation, request validation, and MongoDB database storage.
 
 ## 🚀 Features
 
-- **HTTP Server** - Runs on port 8080
+- **Huma Framework** - Modern REST API framework with automatic OpenAPI 3.1 documentation
+- **Interactive API Docs** - Swagger-like UI at `/docs`
+- **Automatic Validation** - Request/response validation using struct tags
 - **CRUD Operations** - Create, Read, Update, Delete tasks
-- **JSON API** - Returns data in JSON format
-- **Error Handling** - Proper HTTP status codes
-- **MongoDB Integration** - Persistent cloud database storage
-- **Environment Variables** - Secure credential management with .env files
+- **JSON Schema** - Automatic schema generation for all types
+- **MongoDB Integration** - Persistent database storage with local MongoDB
+- **Middleware** - Logging and CORS support
+- **Hot Reload** - Air for automatic server restart on code changes
+- **Production Structure** - Clean `cmd/` and `internal/` package organization
+- **RFC 7807 Errors** - Standard problem details for errors
 
 ## 📦 Installation
 
@@ -91,23 +95,40 @@ curl -X DELETE http://localhost:8080/tasks?id=1
 curl http://localhost:8080/health
 ```
 
+## 📚 API Documentation
+
+This API includes automatic interactive documentation:
+
+- **Interactive Docs:** http://localhost:8080/docs
+- **OpenAPI JSON:** http://localhost:8080/openapi.json
+- **OpenAPI YAML:** http://localhost:8080/openapi.yaml
+
+The documentation is generated automatically from code and includes:
+- Request/response schemas
+- Validation rules
+- Example values
+- Try-it-out functionality
+
 ## 📚 Learning Resources
 
 Check out the `Learning files/` directory for detailed explanations:
 - `CODE_STRUCTURE.md` - Understanding Go file organization
 - `DEPENDENCIES.md` - Understanding go.mod and go.sum
 - `MONGODB_SETUP.md` - How to add MongoDB
+- `MIDDLEWARE_EXPLAINED.md` - Understanding middleware
+- `API_FILE_STRUCTURE.md` - Production API organization
+- **`HUMA_FRAMEWORK.md` - Modern REST API framework guide**
 - `SUMMARY.md` - Complete project overview
 - `TESTING.md` - How to test the API
 
 ## 🛠 Tech Stack
 
 - **Go** - Programming language
-- **net/http** - HTTP server and client
-- **encoding/json** - JSON encoding/decoding
+- **Huma v2** - Modern REST API framework with OpenAPI generation
+- **Chi Router** - HTTP router for Huma
 - **MongoDB** - Database for persistent storage
 - **godotenv** - Environment variable management
-- **strconv** - String conversion utilities
+- **Air** - Hot-reload development tool
 
 ## 📝 Project Structure
 
