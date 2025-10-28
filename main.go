@@ -41,6 +41,74 @@ var (
 	ctx        context.Context   // ctx = context for database operations (handles timeouts and cancellation)
 )
 
+// ========================================
+// MIDDLEWARE FUNCTIONS
+// ========================================
+// Middleware is code that runs BEFORE your handlers (like filters or interceptors)
+// They can modify requests/responses, log information, add headers, check authentication, etc.
+// In Go, middleware is a function that takes a handler and returns a new handler
+
+// loggingMiddleware - Logs information about each HTTP request
+// This helps with debugging and monitoring by showing: method, path, and how long the request took
+func loggingMiddleware(next http.Handler) http.Handler {
+	// http.HandlerFunc converts a function into an http.Handler
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Record the start time of the request
+		start := time.Now()
+
+		// Call the next handler in the chain (the actual route handler)
+		next.ServeHTTP(w, r)
+
+		// After the handler finishes, log the request details
+		// %s = string, %v = any value
+		log.Printf(
+			"%s %s %s",
+			r.Method,           // HTTP method (GET, POST, PUT, DELETE)
+			r.URL.Path,         // The URL path that was requested
+			time.Since(start),  // How long the request took to process
+		)
+	})
+}
+
+// corsMiddleware - Enables Cross-Origin Resource Sharing (CORS)
+// CORS allows your API to be accessed from web browsers on different domains
+// Without CORS, browsers block requests from other websites for security
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Set CORS headers to allow requests from any origin
+		// Access-Control-Allow-Origin: which domains can access this API (* = all domains)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+
+		// Access-Control-Allow-Methods: which HTTP methods are allowed
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+
+		// Access-Control-Allow-Headers: which headers the client can send
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+
+		// Handle preflight requests (OPTIONS method)
+		// Browsers send OPTIONS requests before actual requests to check if CORS is allowed
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		// Call the next handler
+		next.ServeHTTP(w, r)
+	})
+}
+
+// chainMiddleware - Helper function to apply multiple middleware in order
+// This makes it easy to wrap a handler with multiple middleware functions
+// Usage: chainMiddleware(handler, middleware1, middleware2, middleware3)
+func chainMiddleware(h http.Handler, middleware ...func(http.Handler) http.Handler) http.Handler {
+	// Apply middleware in reverse order so they execute in the order provided
+	// If you pass [logging, cors], it will execute: logging -> cors -> handler
+	for i := len(middleware) - 1; i >= 0; i-- {
+		h = middleware[i](h)
+	}
+	return h
+}
+
 // init() - This special function runs AUTOMATICALLY before main() - it's for setup/initialization
 // In Go, init() functions are called automatically when the package is loaded
 func init() {
@@ -100,29 +168,37 @@ func init() {
 // It's like the entry point - Go automatically calls this function when you run your program
 // The empty () means it takes no parameters
 func main() {
-	// http.HandleFunc() - This tells the server "when someone visits this URL, run this function"
-	// It maps URL paths to handler functions
-	// The first parameter is the URL path (like "/" for homepage)
-	// The second parameter is the name of the function to call when that URL is visited
-	http.HandleFunc("/", homeHandler)         // Visit "/" (homepage) → call homeHandler function
-	http.HandleFunc("/tasks", tasksHandler)   // Visit "/tasks" → call tasksHandler function
-	http.HandleFunc("/health", healthHandler) // Visit "/health" → call healthHandler function
+	// Create a new ServeMux (HTTP request multiplexer/router)
+	// ServeMux is more flexible than the default mux and allows us to use middleware
+	mux := http.NewServeMux()
+
+	// Register routes with their handler functions
+	// http.HandlerFunc() converts our handler functions into http.Handler type
+	mux.Handle("/", http.HandlerFunc(homeHandler))
+	mux.Handle("/tasks", http.HandlerFunc(tasksHandler))
+	mux.Handle("/health", http.HandlerFunc(healthHandler))
+
+	// Wrap the entire mux with middleware
+	// The order matters: requests flow through logging -> cors -> handlers
+	// Responses flow back: handlers -> cors -> logging
+	handler := chainMiddleware(
+		mux,
+		loggingMiddleware, // First: log all requests
+		corsMiddleware,    // Second: add CORS headers
+	)
 
 	// fmt.Println() - This prints text to the console (like console.log() in JavaScript)
 	// Each line prints a different message to help you know the server started
 	fmt.Println("🚀 Server starting on http://localhost:8080")
+	fmt.Println("✨ Middleware enabled: Logging, CORS")
 	fmt.Println("Try visiting:")
 	fmt.Println("  - http://localhost:8080/ (homepage)")
 	fmt.Println("  - http://localhost:8080/tasks (get all tasks)")
 	fmt.Println("  - http://localhost:8080/health (health check)")
 
-	// log.Fatal(http.ListenAndServe(":8080", nil)) - This starts the actual HTTP server
-	// http.ListenAndServe() starts listening for incoming HTTP requests on port 8080
-	// ":8080" means "listen on all network interfaces on port 8080"
-	// nil means "use default settings" (we could pass custom settings here, but we're not)
-	// log.Fatal() means "if this fails, print the error and exit the program"
-	// This line blocks (waits forever) until the server stops or crashes
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	// Start the HTTP server with our middleware-wrapped handler
+	// Instead of passing nil, we pass our custom handler that includes middleware
+	log.Fatal(http.ListenAndServe(":8080", handler))
 }
 
 // func homeHandler(...) - This is a function that handles requests to the homepage
