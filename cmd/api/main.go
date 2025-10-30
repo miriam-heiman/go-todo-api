@@ -11,8 +11,8 @@ package main
 // Import statements bring in code from other packages (like "import" in Python or JavaScript)
 import (
 	// STANDARD LIBRARY PACKAGES (built into Go)
-	"fmt"     // fmt = "format" - for printing text to the console (like console.log)
-	"log"     // log = for error messages and logging
+	"fmt"      // fmt = "format" - for printing text to the console (like console.log)
+	"log"      // log = for error messages and logging
 	"net/http" // net/http = for creating web servers and handling HTTP requests
 
 	// OUR OWN PACKAGES (code we wrote in this project)
@@ -21,9 +21,9 @@ import (
 	"go-todo-api/internal/middleware" // Our middleware (code that runs before handlers)
 
 	// THIRD-PARTY PACKAGES (external libraries we installed)
-	"github.com/danielgtaylor/huma/v2"                 // Huma = Modern REST API framework
+	"github.com/danielgtaylor/huma/v2"                  // Huma = Modern REST API framework
 	"github.com/danielgtaylor/huma/v2/adapters/humachi" // Adapter to use Huma with Chi router
-	"github.com/go-chi/chi/v5"                         // Chi = HTTP router (handles URL routing)
+	"github.com/go-chi/chi/v5"                          // Chi = HTTP router (handles URL routing)
 )
 
 // ============================================================================
@@ -66,6 +66,10 @@ func main() {
 	// Without this, browsers block requests from other websites for security
 	router.Use(middleware.CORSChi)
 
+	// Add authentication middleware - requires valid API key for all requests
+	// Every request must include header: X-API-Key: your-key-here
+	router.Use(middleware.AuthChi)
+
 	// ------------------------------------------------------------------------
 	// STEP 4: CREATE HUMA API WITH OPENAPI DOCUMENTATION
 	// ------------------------------------------------------------------------
@@ -98,12 +102,12 @@ func main() {
 	// GET /health → Returns { "status": "healthy", "message": "..." }
 	// Used to check if the server is running (monitoring tools use this)
 	huma.Register(api, huma.Operation{
-		OperationID: "get-health",               // Unique ID for this operation (used in docs)
-		Method:      http.MethodGet,             // HTTP method: GET, POST, PUT, DELETE, etc.
-		Path:        "/health",                  // URL path: http://localhost:8080/health
-		Summary:     "Health check",             // Short description (shows in docs)
+		OperationID: "get-health",                                     // Unique ID for this operation (used in docs)
+		Method:      http.MethodGet,                                   // HTTP method: GET, POST, PUT, DELETE, etc.
+		Path:        "/health",                                        // URL path: http://localhost:8080/health
+		Summary:     "Health check",                                   // Short description (shows in docs)
 		Description: "Check if the API server is running and healthy", // Long description
-		Tags:        []string{"System"},         // Groups this endpoint under "System" in docs
+		Tags:        []string{"System"},                               // Groups this endpoint under "System" in docs
 	}, handlers.Health) // handlers.Health is the function that handles this request
 
 	// GET ALL TASKS ENDPOINT
@@ -135,12 +139,12 @@ func main() {
 	// Creates a new task in the database
 	huma.Register(api, huma.Operation{
 		OperationID:   "create-task",
-		Method:        http.MethodPost,        // POST = create new resource
+		Method:        http.MethodPost, // POST = create new resource
 		Path:          "/tasks",
 		Summary:       "Create a new task",
 		Description:   "Add a new TODO task to the database",
 		Tags:          []string{"Tasks"},
-		DefaultStatus: http.StatusCreated,     // Return 201 Created (not 200 OK)
+		DefaultStatus: http.StatusCreated, // Return 201 Created (not 200 OK)
 	}, handlers.CreateTask)
 
 	// UPDATE EXISTING TASK ENDPOINT
@@ -148,7 +152,7 @@ func main() {
 	// Updates an existing task's fields
 	huma.Register(api, huma.Operation{
 		OperationID: "update-task",
-		Method:      http.MethodPut,           // PUT = update existing resource
+		Method:      http.MethodPut, // PUT = update existing resource
 		Path:        "/tasks/{id}",
 		Summary:     "Update a task",
 		Description: "Update an existing task's title, description, or completion status",
@@ -160,7 +164,7 @@ func main() {
 	// Removes a task from the database permanently
 	huma.Register(api, huma.Operation{
 		OperationID: "delete-task",
-		Method:      http.MethodDelete,        // DELETE = remove resource
+		Method:      http.MethodDelete, // DELETE = remove resource
 		Path:        "/tasks/{id}",
 		Summary:     "Delete a task",
 		Description: "Remove a task from the database",
@@ -174,7 +178,7 @@ func main() {
 	// This helps developers know the server started successfully
 	fmt.Println("🚀 Server starting on http://localhost:8080")
 	fmt.Println("✨ Framework: Huma v2 with Chi router")
-	fmt.Println("✨ Middleware enabled: Logging, CORS")
+	fmt.Println("✨ Middleware enabled: Logging, CORS, Authentication")
 	fmt.Println("📁 Production structure: cmd/ and internal/ packages")
 	fmt.Println("📚 OpenAPI Documentation available at:")
 	fmt.Println("  - http://localhost:8080/docs (Interactive API docs)")
@@ -194,7 +198,7 @@ func main() {
 	// This is the most important line - it actually starts the web server!
 
 	port := ":8080" // Port 8080 = the door number your server listens on
-	                // :8080 means "listen on all network interfaces on port 8080"
+	// :8080 means "listen on all network interfaces on port 8080"
 
 	// http.ListenAndServe() starts the server and BLOCKS FOREVER
 	// This means the program doesn't exit - it keeps running, waiting for requests
