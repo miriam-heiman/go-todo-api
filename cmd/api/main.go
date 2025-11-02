@@ -19,6 +19,7 @@ import (
 	"go-todo-api/internal/database"   // Our database connection code
 	"go-todo-api/internal/handlers"   // Our API endpoint handlers (the logic for each route)
 	"go-todo-api/internal/middleware" // Our middleware (code that runs before handlers)
+	"go-todo-api/internal/tracing"    // Our tracing code setup
 
 	// THIRD-PARTY PACKAGES (external libraries we installed)
 	"github.com/danielgtaylor/huma/v2"                  // Huma = Modern REST API framework
@@ -43,7 +44,15 @@ func main() {
 	// After this line, we have an active connection to MongoDB!
 
 	// ------------------------------------------------------------------------
-	// STEP 2: CREATE HTTP ROUTER
+	// STEP 2: INITIALIZE TRACING
+	// ------------------------------------------------------------------------
+	// Set up OpenTelemetry tracing to track request performance
+	// This returns a cleanup function that we'll call when the server shuts down
+	shutdown := tracing.Init("todo-api")
+	defer shutdown() // Call shutdown when main() exits to flush traces
+
+	// ------------------------------------------------------------------------
+	// STEP 3: CREATE HTTP ROUTER
 	// ------------------------------------------------------------------------
 	// A router decides which function (handler) to call based on the URL
 	// For example: GET /tasks → calls GetAllTasks handler
@@ -52,10 +61,13 @@ func main() {
 	router := chi.NewMux() // NewMux() creates a new router (Mux = "HTTP request multiplexer")
 
 	// ------------------------------------------------------------------------
-	// STEP 3: ADD MIDDLEWARE
+	// STEP 4: ADD MIDDLEWARE
 	// ------------------------------------------------------------------------
 	// Middleware is code that runs BEFORE your handlers
-	// Think of it like airport security - everyone goes through it before boarding
+
+	// Add tracing middleware - creates spans for every request
+	// This should be first so it measures the full request duration
+	router.Use(middleware.TracingChi)
 
 	// Add logging middleware - logs every HTTP request (method, path, time)
 	// Example log: "GET /tasks 2.5ms"
@@ -71,7 +83,7 @@ func main() {
 	router.Use(middleware.AuthChi)
 
 	// ------------------------------------------------------------------------
-	// STEP 4: CREATE HUMA API WITH OPENAPI DOCUMENTATION
+	// STEP 5: CREATE HUMA API WITH OPENAPI DOCUMENTATION
 	// ------------------------------------------------------------------------
 	// Huma is a framework that wraps your router and adds superpowers:
 	// - Automatic OpenAPI documentation generation
@@ -92,7 +104,7 @@ func main() {
 	}
 
 	// ------------------------------------------------------------------------
-	// STEP 5: REGISTER API ENDPOINTS (ROUTES)
+	// STEP 6: REGISTER API ENDPOINTS (ROUTES)
 	// ------------------------------------------------------------------------
 	// Each huma.Register() call tells Huma:
 	// "When someone makes a [METHOD] request to [PATH], call this [HANDLER]"
@@ -172,7 +184,7 @@ func main() {
 	}, handlers.DeleteTask)
 
 	// ------------------------------------------------------------------------
-	// STEP 6: PRINT STARTUP INFORMATION
+	// STEP 7: PRINT STARTUP INFORMATION
 	// ------------------------------------------------------------------------
 	// fmt.Println() prints text to the console (like console.log in JavaScript)
 	// This helps developers know the server started successfully
@@ -193,7 +205,7 @@ func main() {
 	fmt.Println("  - DELETE /tasks/{id}")
 
 	// ------------------------------------------------------------------------
-	// STEP 7: START THE HTTP SERVER
+	// STEP 8: START THE HTTP SERVER
 	// ------------------------------------------------------------------------
 	// This is the most important line - it actually starts the web server!
 
@@ -214,12 +226,13 @@ func main() {
 //
 // 1. Program starts → main() function is called
 // 2. Connect to MongoDB database
-// 3. Create a router (Chi) to handle different URLs
-// 4. Add middleware (logging, CORS) that runs before every request
-// 5. Wrap router with Huma for automatic docs and validation
-// 6. Register 6 endpoints (health check + 5 CRUD operations)
-// 7. Print helpful startup messages
-// 8. Start HTTP server on port 8080 (blocks forever, handling requests)
+// 3. Initialize tracing requests
+// 4. Create a router (Chi) to handle different URLs
+// 5. Add middleware (logging, CORS) that runs before every request
+// 6. Wrap router with Huma for automatic docs and validation
+// 7. Register 6 endpoints (health check + 5 CRUD operations)
+// 8. Print helpful startup messages
+// 9. Start HTTP server on port 8080 (blocks forever, handling requests)
 //
 // When a request comes in:
 // Request → Middleware (logging, CORS) → Router (finds matching handler)
