@@ -444,32 +444,55 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 // Example request:  DELETE /tasks/6900d436e231fdbb964c3c1c
 // Example response: {"message": "Task deleted successfully", "id": "6900d436e231fdbb964c3c1c"}
 func DeleteTask(ctx context.Context, input *models.DeleteTaskInput) (*models.DeleteTaskOutput, error) {
+	// Create tracer and handler span
+	tracer := otel.Tracer("handlers")
+	ctx, handlerSpan := tracer.Start(ctx, "DeleteTask")
+	defer handlerSpan.End()
+
+	// Add task ID to span attributes
+	handlerSpan.SetAttributes(attribute.String("task.id", input.ID))
+
 	// ----------------------------------------------------------------------------
 	// STEP 1: CONVERT STRING ID TO MONGODB OBJECTID
 	// ----------------------------------------------------------------------------
 	objectID, err := primitive.ObjectIDFromHex(input.ID)
 	if err != nil {
+		handlerSpan.RecordError(err)
 		return nil, huma.Error400BadRequest("Invalid task ID format")
 	}
 
 	// ----------------------------------------------------------------------------
 	// STEP 2: CREATE DATABASE CONTEXT WITH TIMEOUT
 	// ----------------------------------------------------------------------------
-	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// ----------------------------------------------------------------------------
 	// STEP 3: DELETE THE TASK FROM MONGODB
 	// ----------------------------------------------------------------------------
+	// Create span for DeleteOne operation
+	_, deleteSpan := tracer.Start(ctx, "MongoDB.DeleteOne")
+	deleteSpan.SetAttributes(
+		attribute.String("db.system", "mongodb"),
+		attribute.String("db.collection", "tasks"),
+		attribute.String("db.operation", "deleteOne"),
+	)
 	collection := database.GetCollection()
 	// DeleteOne(filter) removes the first document that matches the filter
 	// Returns result with DeletedCount (how many documents were deleted)
 	// Should be either 0 (not found) or 1 (successfully deleted)
 	result, err := collection.DeleteOne(dbCtx, bson.M{"_id": objectID})
 	if err != nil {
+		deleteSpan.End()
+		handlerSpan.RecordError(err)
 		// Database error during deletion → HTTP 500 error
 		return nil, huma.Error500InternalServerError("Failed to delete task")
 	}
+
+	deleteSpan.End()
+
+	// Add deleted count to span
+	handlerSpan.SetAttributes(attribute.Int64("result.deletedCount", result.DeletedCount))
 
 	// ----------------------------------------------------------------------------
 	// STEP 4: CHECK IF TASK WAS ACTUALLY DELETED
