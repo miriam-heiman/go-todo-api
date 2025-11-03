@@ -61,29 +61,25 @@ func GetAllTasks(ctx context.Context, input *models.GetTasksInput) (*models.GetT
 	ctx, handlerSpan := tracer.Start(ctx, "GetAllTasks")
 	defer handlerSpan.End()
 
-	// Create a database context with timeout
-	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	// ----------------------------------------------------------------------------
 	// STEP 3: BUILD FILTER AND ADD ATTRIBUTES
 	// ----------------------------------------------------------------------------
 	// Build the MongoDB filter
+	// SetAttributes adds metadata to the span
 	filter := bson.M{}
-	if input.Completed != "" {
-		if input.Completed == "true" {
-			filter["completed"] = true
-		} else if input.Completed == "false" {
-			filter["completed"] = false
-		}
-		// Add metadata to the span
+	switch input.Completed {
+	case "true":
+		filter["completed"] = true
+		handlerSpan.SetAttributes(attribute.String("filter.completed", input.Completed))
+	case "false":
+		filter["completed"] = false
 		handlerSpan.SetAttributes(attribute.String("filter.completed", input.Completed))
 	}
 
 	// ----------------------------------------------------------------------------
 	// STEP 4: CREATE DATABASE SPAN
 	// ----------------------------------------------------------------------------
-	// Create a span for the database query
+	// Create a child span for the database query
 	collection := database.GetCollection()
 	ctx, dbSpan := tracer.Start(ctx, "MongoDB.Find")
 	dbSpan.SetAttributes( // adds 3 tags: the database type, which collection and what operation
@@ -91,6 +87,10 @@ func GetAllTasks(ctx context.Context, input *models.GetTasksInput) (*models.GetT
 		attribute.String("db.collection", "tasks"),
 		attribute.String("db.operation", "find"),
 	)
+
+	// Create database timeout context from the SPAN context
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second) // Use span's ctx
+	defer cancel()
 
 	// ----------------------------------------------------------------------------
 	// STEP 5: EXECUTE QUERY AND END SPAN
