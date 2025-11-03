@@ -208,6 +208,11 @@ func GetTaskByID(ctx context.Context, input *models.GetTaskInput) (*models.GetTa
 // Example request:  POST /tasks with body: {"title": "Buy milk", "description": "From the store"}
 // Example response: {"id": "6900d436e231fdbb964c3c1c", "title": "Buy milk", "description": "From the store", "completed": false}
 func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.CreateTaskOutput, error) {
+	// Create tracer and handler span
+	tracer := otel.Tracer("handlers")
+	ctx, handlerSpan := tracer.Start(ctx, "CreateTask")
+	defer handlerSpan.End()
+
 	// ----------------------------------------------------------------------------
 	// STEP 1: CREATE NEW TASK STRUCT FROM INPUT
 	// ----------------------------------------------------------------------------
@@ -220,25 +225,44 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 		Completed:   false,                  // Always starts as not completed
 	}
 
+	// Add task attributes to span
+	handlerSpan.SetAttributes(
+		attribute.String("task.title", input.Body.Title),
+		attribute.Bool("task.completed", false),
+	)
+
 	// ----------------------------------------------------------------------------
 	// STEP 2: CREATE DATABASE CONTEXT WITH TIMEOUT
 	// ----------------------------------------------------------------------------
-	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// ----------------------------------------------------------------------------
 	// STEP 3: INSERT THE NEW TASK INTO MONGODB
 	// ----------------------------------------------------------------------------
+	// Create database span
+	_, dbSpan := tracer.Start(ctx, "MongoDB.InsertOne")
+	dbSpan.SetAttributes(
+		attribute.String("db.system", "mongodb"),
+		attribute.String("db.collection", "tasks"),
+	)
+
 	collection := database.GetCollection()
 	// InsertOne() adds the newTask to the database
 	// It returns:
 	//   - result.InsertedID = the auto-generated MongoDB ID for this document
 	//   - err = any error that occurred during insertion
 	result, err := collection.InsertOne(dbCtx, newTask)
+
+	// Error recorded and will be visible in Jaeger
 	if err != nil {
+		handlerSpan.RecordError(err)
+		dbSpan.End()
 		// If insertion fails (database down, disk full, etc.) → HTTP 500 error
 		return nil, huma.Error500InternalServerError("Failed to create task in database")
 	}
+	// End the span once the task has been added to the db
+	dbSpan.End()
 
 	// ----------------------------------------------------------------------------
 	// STEP 4: SET THE AUTO-GENERATED ID ON OUR TASK
@@ -248,6 +272,9 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 	// .(primitive.ObjectID) = type assertion (like casting in other languages)
 	// This says: "I know this is an ObjectID, treat it as one"
 	newTask.ID = result.InsertedID.(primitive.ObjectID)
+
+	// Record the generated ID in the span
+	handlerSpan.SetAttributes(attribute.String("task.id", newTask.ID.Hex()))
 
 	// ----------------------------------------------------------------------------
 	// STEP 5: LOG SUCCESS AND RETURN THE NEW TASK
@@ -278,6 +305,14 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 // - Fields not sent remain unchanged
 // - We use pointers (*string, *bool) to distinguish "not sent" from "sent but empty"
 func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.UpdateTaskOutput, error) {
+	// Create tracer and handler span
+	tracer := otel.Tracer("handlers")
+	ctx, handlerSpan := tracer.Start(ctx, "UpdateTask")
+	defer handlerSpan.End()
+
+	// Add task ID to span attributes
+	handlerSpan.SetAttributes(attribute.String("task.id", input.ID))
+
 	// ----------------------------------------------------------------------------
 	// STEP 1: CONVERT STRING ID TO MONGODB OBJECTID
 	// ----------------------------------------------------------------------------
@@ -289,7 +324,7 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 	// ----------------------------------------------------------------------------
 	// STEP 2: CREATE DATABASE CONTEXT WITH TIMEOUT
 	// ----------------------------------------------------------------------------
-	dbCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	dbCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	collection := database.GetCollection()
@@ -297,16 +332,28 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 	// ----------------------------------------------------------------------------
 	// STEP 3: CHECK IF TASK EXISTS (OPTIONAL BUT GOOD PRACTICE)
 	// ----------------------------------------------------------------------------
+	// Create span for FindOne operation
+	_, findSpan := tracer.Start(ctx, "MongoDB.FindONe")
+	findSpan.SetAttributes(
+		attribute.String("db.system", "mongodb"),
+		attribute.String("db.collection", "tasks"),
+		attribute.String("db.operation", "findOne"),
+	)
+
 	// Find the existing task first to verify it exists
 	// This gives us a better error message if the task doesn't exist
 	var existingTask models.Task
 	err = collection.FindOne(dbCtx, bson.M{"_id": objectID}).Decode(&existingTask)
 	if err != nil {
+		findSpan.End()
+		handlerSpan.RecordError(err)
 		if err == mongo.ErrNoDocuments {
 			return nil, huma.Error404NotFound("Task not found")
 		}
 		return nil, huma.Error500InternalServerError("Failed to fetch task")
 	}
+
+	findSpan.End()
 
 	// ----------------------------------------------------------------------------
 	// STEP 4: BUILD UPDATE DOCUMENT WITH ONLY PROVIDED FIELDS
@@ -343,12 +390,26 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 	// ----------------------------------------------------------------------------
 	// STEP 6: PERFORM THE UPDATE IN MONGODB
 	// ----------------------------------------------------------------------------
+	// Create span for UpdateOne operation
+	_, updateSpan := tracer.Start(ctx, "MongoDB.UpdateOne")
+	updateSpan.SetAttributes(
+		attribute.String("db.system", "mongodb"),
+		attribute.String("db.collection", "tasks"),
+		attribute.String("db.operation", "updateOne"),
+	)
+
 	// UpdateOne(filter, update) updates the first document matching the filter
 	// Returns result with MatchedCount (how many docs matched) and ModifiedCount
 	result, err := collection.UpdateOne(dbCtx, bson.M{"_id": objectID}, update)
 	if err != nil {
+		updateSpan.End()
+		handlerSpan.RecordError(err)
 		return nil, huma.Error500InternalServerError("Failed to update task")
 	}
+	updateSpan.End()
+
+	// Add modified count to span
+	handlerSpan.SetAttributes(attribute.Int64("result.modifiedCount", result.ModifiedCount))
 
 	// Double-check that a document was actually matched (should always be 1)
 	if result.MatchedCount == 0 {
