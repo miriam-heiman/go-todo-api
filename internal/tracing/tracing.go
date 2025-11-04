@@ -1,16 +1,21 @@
 package tracing
 
 import (
+	// STANDARD LIBRARY PACKAGES
 	"context" // Manages request lifecycles, timeouts and cancellation
-	"fmt" // Formatted printing to console (like console.log)
-	"log" // Logging with timestamps and error handling
+	// Formatted printing to console (like console.log)
+	"log"  // Logging with timestamps and error handling
 	"time" // Working with the time durations and delays
 
+	// OUR OWN PACKAGES
+	"go-todo-api/internal/logger" // Our structured logger
+
+	// THIRD-PARTY LIBRARY PACKAGES
+	"go.opentelemetry.io/otel"                                        // Exporter: Sends traces via HTTP to Jaeger/Tempo
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp" // OpenTelemetry core: Main OTel packages - gives access to the global tracer
-	"go.opentelemetry.io/otel" // Exporter: Sends traces via HTTP to Jaeger/Tempo
-	"go.opentelemetry.io/otel/sdk/resource" // Resource: Service metada
-	sdktrace "go.opentelemetry.io/otel/sdk/trace" // Trace provider: Core tracing functionality, creates spans
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0" // Semantic conventions: Standard attribute names for service.name, etc.
+	"go.opentelemetry.io/otel/sdk/resource"                           // Resource: Service metada
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"                     // Trace provider: Core tracing functionality, creates spans
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"                // Semantic conventions: Standard attribute names for service.name, etc.
 )
 
 // Initialises the ServiceName variable
@@ -24,10 +29,11 @@ func Init(serviceName string) func() {
 	ctx := context.Background()
 
 	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpoint("localhost:4318"), // Jaeger OTLP endpoint
-	otlptracehttp.WithInsecure(), // No TLS for local development as security is unnecessary
+		otlptracehttp.WithInsecure(), // No TLS for local development as security is unnecessary
 	)
 	if err != nil {
-		log.Fatalf("Failed to create OTLP trace exporter: %v", err)
+		logger.Log.Error("Failed to create OTLP trace exporter", "error", err)
+		log.Fatal("Failed to create OTLP trace exporter:")
 	}
 
 	// Step 2: Create a resource (describes this service)
@@ -35,17 +41,18 @@ func Init(serviceName string) func() {
 	res, err := resource.New(ctx, resource.WithAttributes(
 		semconv.ServiceName(ServiceName),
 		semconv.ServiceVersion("1.0.0"),
-		),
+	),
 	)
 	if err != nil {
-		log.Fatalf("Failed to create resource: %v", err)
+		logger.Log.Error("Failed to create resource", "error", err)
+		log.Fatal("Failed to create resource")
 	}
 
 	// Step 3: Create a trace provider
 	// This is the core of OpenTelemetry - it creates and manages spans
 	tp := sdktrace.NewTracerProvider(
-		sdktrace.WithBatcher(exporter), // Send traces in batches (efficient)
-		sdktrace.WithResource(res), // Attach our service metadata
+		sdktrace.WithBatcher(exporter),                // Send traces in batches (efficient)
+		sdktrace.WithResource(res),                    // Attach our service metadata
 		sdktrace.WithSampler(sdktrace.AlwaysSample()), // Sample 100% of traces (for learning)
 	)
 
@@ -53,16 +60,14 @@ func Init(serviceName string) func() {
 	// This makes it available everywhere in your app via otel.Tracer()
 	otel.SetTracerProvider(tp)
 
-	fmt.Println("✅ OpenTelemetry tracing initialized")
-	fmt.Println("📊 Sending traces to: localhost:4318 (Jaeger)")
-
+	logger.Log.Info("OpenTelemetry tracing initialized", "endpoint", "localhost:4318", "backend", "Jaeger")
 	// Return a cleanup function
 	// Call this when the server shuts down to flush any remaining traces
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := tp.Shutdown(ctx); err != nil {
-			log.Printf("Error shutting down tracer provider: %v", err)
+			logger.Log.Error("Error shutting down tracer provider", "error", err)
 		}
 	}
 }
