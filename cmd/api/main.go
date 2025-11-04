@@ -35,6 +35,14 @@ import (
 // When you run your program, Go automatically calls this function first
 // Think of it like the "start" button of your application
 func main() {
+
+	// ------------------------------------------------------------------------
+	// STEP 0: INITIALIZE STRUCTURED LOGGING
+	// ------------------------------------------------------------------------
+	// Set up JSON structured logging for better observability
+	// This creates a global logger that all parts of the app can use
+	logger.Init()
+
 	// ------------------------------------------------------------------------
 	// STEP 1: CONNECT TO DATABASE
 	// ------------------------------------------------------------------------
@@ -51,13 +59,6 @@ func main() {
 	// This returns a cleanup function that we'll call when the server shuts down
 	shutdown := tracing.Init("todo-api")
 	defer shutdown() // Call shutdown when main() exits to flush traces
-
-	// ------------------------------------------------------------------------
-	// STEP 2.5: INITIALIZE STRUCTURED LOGGING
-	// ------------------------------------------------------------------------
-	// Set up JSON structured logging for better observability
-	// This creates a global logger that all parts of the app can use
-	logger.Init()
 
 	// ------------------------------------------------------------------------
 	// STEP 3: CREATE HTTP ROUTER
