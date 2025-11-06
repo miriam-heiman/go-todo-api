@@ -3,9 +3,8 @@ package tracing
 import (
 	// STANDARD LIBRARY PACKAGES
 	"context" // Manages request lifecycles, timeouts and cancellation
-	// Formatted printing to console (like console.log)
-	"log"  // Logging with timestamps and error handling
-	"time" // Working with the time durations and delays
+	"log"     // Logging with timestamps and error handling
+	"time"    // Working with the time durations and delays
 
 	// OUR OWN PACKAGES
 	"go-todo-api/internal/logger" // Our structured logger

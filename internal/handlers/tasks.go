@@ -20,7 +20,8 @@ import (
 	"go-todo-api/internal/models"   // Our data structures (Task, Input/Output types)
 
 	// THIRD-PARTY PACKAGES
-	"github.com/danielgtaylor/huma/v2"           // Huma = REST API framework with error helpers
+	"github.com/danielgtaylor/huma/v2" // Huma = REST API framework with error helpers
+	// humachi import to unwrap the context at the beginning of the handler
 	"go.mongodb.org/mongo-driver/bson"           // bson = MongoDB's query language (like SQL)
 	"go.mongodb.org/mongo-driver/bson/primitive" // primitive = MongoDB types (ObjectID)
 	"go.mongodb.org/mongo-driver/mongo"          // mongo = MongoDB driver for Go

@@ -75,7 +75,7 @@ func main() {
 	// Middleware is code that runs BEFORE your handlers
 
 	// Add tracing middleware - creates spans for every request
-	// This should be first so it measures the full request duration
+	// This shold be first so it measures the full request duration
 	router.Use(middleware.TracingChi)
 
 	// Add logging middleware - logs every HTTP request (method, path, time)
@@ -100,9 +100,13 @@ func main() {
 	// - Automatic JSON encoding/decoding
 	// - Better error handling
 
+	// Create Huma config with custom context tranformer
+	// This ensures OpenTelemetry spac context is passed from HTTP middleware to handlers
+	config := huma.DefaultConfig("TODO API", "1.0.0")
+
 	// Create Huma API instance with default configuration
 	// "TODO API" = API name, "1.0.0" = version number
-	api := humachi.New(router, huma.DefaultConfig("TODO API", "1.0.0"))
+	api := humachi.New(router, config)
 
 	// Add metadata to the API documentation
 	// This shows up in the /docs page that users can see
@@ -225,7 +229,7 @@ func main() {
 	// This means the program doesn't exit - it keeps running, waiting for requests
 	// log.Fatal() means "if the server fails to start, print the error and exit"
 	log.Fatal(http.ListenAndServe(port, router))
-	// ↑ This line never returns unless there's an error!
+
 	// The server is now running and handling requests 24/7 until you stop it
 }
 
@@ -237,7 +241,7 @@ func main() {
 // 2. Connect to MongoDB database
 // 3. Initialize tracing requests
 // 4. Create a router (Chi) to handle different URLs
-// 5. Add middleware (logging, CORS) that runs before every request
+// 5. Add middleware (tracing, logging, CORS) that runs before every request
 // 6. Wrap router with Huma for automatic docs and validation
 // 7. Register 6 endpoints (health check + 5 CRUD operations)
 // 8. Print helpful startup messages
@@ -250,13 +254,15 @@ func main() {
 // Example flow for "GET /tasks":
 // 1. Browser sends: GET http://localhost:8080/tasks
 // 2. Server receives request
-// 3. Logging middleware logs: "GET /tasks"
-// 4. CORS middleware adds CORS headers
-// 5. Router sees "/tasks" with GET method
-// 6. Router calls handlers.GetAllTasks()
-// 7. Handler queries MongoDB for all tasks
-// 8. Huma converts tasks to JSON
-// 9. Response sent back: [{"id": "...", "title": "..."}]
-// 10. Logging middleware logs: "GET /tasks 5ms"
+// 3. Tracing middleware creates a span for the request
+// 4. Logging middleware logs: "GET /tasks"
+// 5. Cors middleware adds Cors headers
+// 6. Auth middleware checks API key
+// 7. Router sees "/tasks" with GET method
+// 8. Router calls handlers.GetAllTasks()
+// 9. Handler queries MongoDB for all tasks
+// 10. Huma converts tasks to JSON
+// 11. Response sent back: [{"id": "...", "title": "..."}]
+// 12. Logging middleware logs: "GET /tasks 5ms"
 //
 // ============================================================================
