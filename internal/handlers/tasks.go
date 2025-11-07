@@ -1,9 +1,7 @@
 // ============================================================================
 // PACKAGE DECLARATION
 // ============================================================================
-// Package handlers contains all the HTTP handler functions for our API
-// Handlers are the "business logic" - they process requests and return responses
-// Think of handlers as the "controllers" in MVC pattern
+
 package handlers
 
 // ============================================================================
@@ -12,16 +10,16 @@ package handlers
 import (
 	// STANDARD LIBRARY PACKAGES
 	"context" // context = for managing request timeouts and cancellation
-	"fmt"     // fmt = for printing formatted output to console
-	"time"    // time = for working with time durations and timeouts
+	"log/slog"
+	"time" // time = for working with time durations and timeouts
 
 	// OUR OWN PACKAGES
 	"go-todo-api/internal/database" // Our database connection code
+	"go-todo-api/internal/logger"   // Our structured logger
 	"go-todo-api/internal/models"   // Our data structures (Task, Input/Output types)
 
 	// THIRD-PARTY PACKAGES
-	"github.com/danielgtaylor/huma/v2" // Huma = REST API framework with error helpers
-	// humachi import to unwrap the context at the beginning of the handler
+	"github.com/danielgtaylor/huma/v2"           // Huma = REST API framework with error helpers
 	"go.mongodb.org/mongo-driver/bson"           // bson = MongoDB's query language (like SQL)
 	"go.mongodb.org/mongo-driver/bson/primitive" // primitive = MongoDB types (ObjectID)
 	"go.mongodb.org/mongo-driver/mongo"          // mongo = MongoDB driver for Go
@@ -127,10 +125,15 @@ func GetAllTasks(ctx context.Context, input *models.GetTasksInput) (*models.GetT
 	// Add result count to span
 	handlerSpan.SetAttributes(attribute.Int("result.count", len(tasks)))
 
+	// Log with trace context for correlation in Grafana
+	log := logger.WithTrace(ctx)
 	if input.Completed != "" {
-		fmt.Printf("✅ Retrieved %d tasks from MongoDB (filtered by completed=%s)\n", len(tasks), input.Completed)
+		log.Info("Retrieved tasks from MongoDB",
+			slog.Int("count", len(tasks)),
+			slog.String("filter", input.Completed))
 	} else {
-		fmt.Printf("✅ Retrieved %d tasks from MongoDB (no filter)\n", len(tasks))
+		log.Info("Retrieved tasks from MongoDB",
+			slog.Int("count", len(tasks)))
 	}
 
 	return &models.GetTasksOutput{Body: tasks}, nil
@@ -190,7 +193,8 @@ func GetTaskByID(ctx context.Context, input *models.GetTaskInput) (*models.GetTa
 	// STEP 5: LOG SUCCESS AND RETURN RESULT
 	// ----------------------------------------------------------------------------
 	// .Hex() converts ObjectID back to string for logging
-	fmt.Printf("✅ Retrieved task with ID %s\n", objectID.Hex())
+	logger.WithTrace(ctx).Info("Retrieved task by ID",
+		slog.String("id", objectID.Hex()))
 
 	// Return the output struct with the task we found
 	return &models.GetTaskOutput{Body: task}, nil
@@ -280,8 +284,10 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 	// ----------------------------------------------------------------------------
 	// STEP 5: LOG SUCCESS AND RETURN THE NEW TASK
 	// ----------------------------------------------------------------------------
-	// Print success message with the task title and new ID
-	fmt.Printf("✅ Created new task: %s with ID %s\n", newTask.Title, newTask.ID.Hex())
+	// Structured logging
+	logger.WithTrace(ctx).Info("Created new task",
+		slog.String("title", newTask.Title),
+		slog.String("id", newTask.ID.Hex()))
 
 	// Return the complete task (now with its ID) to the client
 	// HTTP status will be 201 Created (set in main.go with DefaultStatus)
@@ -428,7 +434,9 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 	// ----------------------------------------------------------------------------
 	// STEP 8: LOG SUCCESS AND RETURN UPDATED TASK
 	// ----------------------------------------------------------------------------
-	fmt.Printf("✅ Updated task with ID %s\n", objectID.Hex())
+	logger.WithTrace(ctx).Info("Updated task",
+		slog.String("id", objectID.Hex()),
+		slog.Int64("modified_count", result.ModifiedCount))
 	return &models.UpdateTaskOutput{Body: updatedTask}, nil
 }
 
@@ -506,7 +514,9 @@ func DeleteTask(ctx context.Context, input *models.DeleteTaskInput) (*models.Del
 	// ----------------------------------------------------------------------------
 	// STEP 5: LOG SUCCESS AND RETURN CONFIRMATION
 	// ----------------------------------------------------------------------------
-	fmt.Printf("✅ Deleted task with ID %s\n", objectID.Hex())
+	logger.WithTrace(ctx).Info("Deleted task",
+		slog.String("id", objectID.Hex()),
+		slog.Int64("deleted_count", result.DeletedCount))
 
 	// Return a success message with the deleted task's ID
 	// This uses an anonymous struct (defined inline without a type name)

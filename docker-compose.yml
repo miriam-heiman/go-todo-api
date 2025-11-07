@@ -20,6 +20,27 @@ services:
     volumes: 
       - mongodb_data:/data/db
 
+  # Go TODO API - Our application
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - MONGO_URI=mongodb://mongodb:27017/todoapi
+      - API_KEY=dev-secret-key-12345
+      - PORT=8080
+    networks:
+      - lgtm
+    depends_on:
+      - mongodb
+      - tempo
+      - loki
+    labels:
+      logging: "promtail"
+      logging_jobname: "go-todo-api"
+
   # Tempo - Distributed tracing backend (replaces Jaeger)
   tempo: 
     image: grafana/tempo:latest
@@ -49,6 +70,19 @@ services:
     depends_on:
       - loki
       - tempo
+  # Promtail - Log shipping agent (sends logs to Loki)
+  promtail: 
+    image: grafana/promtail:latest
+    ports: 
+      - "9080:9080"
+    volumes: 
+      - ./promtail-config.yaml:/etc/promtail/config.yaml
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: -config.file=/etc/promtail/config.yaml
+    networks: 
+      - lgtm
+    depends_on:
+      - loki
 
 networks: 
   lgtm:
