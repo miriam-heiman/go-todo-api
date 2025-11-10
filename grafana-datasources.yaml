@@ -7,6 +7,12 @@ datasources:
     url: http://loki:3100
     isDefault: true
     editable: true
+    jsonData:
+      derivedFields:
+        - datasourceUid: Tempo
+          matcherRegex: "trace_id\"?:\"?([0-9a-fA-F]+)"
+          name: TraceID
+          url: $${__value.raw}
 
   - name: Tempo
     type: tempo
@@ -14,7 +20,16 @@ datasources:
     url: http://tempo:3200
     editable: true
     jsonData:
-      tracestoLogs:
+      tracesToLogs:
         datasourceUid: Loki
-        tags: ['job', 'instance']
+        tags: ['job', 'instance', 'container']
         mappedTags: [{key: 'service.name', value: 'service'}]
+        filterByTraceID: true
+        filterBySpanID: false
+        mapTagNamesEnabled: true
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: Loki

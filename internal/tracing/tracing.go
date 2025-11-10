@@ -4,17 +4,20 @@ import (
 	// STANDARD LIBRARY PACKAGES
 	"context" // Manages request lifecycles, timeouts and cancellation
 	"log"     // Logging with timestamps and error handling
-	"time"    // Working with the time durations and delays
+	"os"
+	"time" // Working with the time durations and delays
 
 	// OUR OWN PACKAGES
 	"go-todo-api/internal/logger" // Our structured logger
 
 	// THIRD-PARTY LIBRARY PACKAGES
-	"go.opentelemetry.io/otel"                                        // Exporter: Sends traces via HTTP to Jaeger/Tempo
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp" // OpenTelemetry core: Main OTel packages - gives access to the global tracer
-	"go.opentelemetry.io/otel/sdk/resource"                           // Resource: Service metada
-	sdktrace "go.opentelemetry.io/otel/sdk/trace"                     // Trace provider: Core tracing functionality, creates spans
-	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"                // Semantic conventions: Standard attribute names for service.name, etc.
+	"go.opentelemetry.io/otel" // Exporter: Sends traces via HTTP to Jaeger/Tempo
+
+	// OpenTelemetry core: Main OTel packages - gives access to the global tracer
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/sdk/resource"            // Resource: Service metada
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"      // Trace provider: Core tracing functionality, creates spans
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0" // Semantic conventions: Standard attribute names for service.name, etc.
 )
 
 // Initialises the ServiceName variable
@@ -27,9 +30,21 @@ func Init(serviceName string) func() {
 	// This sends traces to Jaeger (or an OTLP-compatible backend)
 	ctx := context.Background()
 
-	exporter, err := otlptracehttp.New(ctx, otlptracehttp.WithEndpoint("localhost:4318"), // Jaeger OTLP endpoint
-		otlptracehttp.WithInsecure(), // No TLS for local development as security is unnecessary
+	// Read OTLP endpoint from environment, default to localhost for local dev
+	otlpEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
+	if otlpEndpoint == "" {
+		otlpEndpoint = "http://localhost:4318"
+	}
+	// Strip http:// prefix if present (the library adds it)
+	if len(otlpEndpoint) > 7 && otlpEndpoint[:7] == "http://" {
+		otlpEndpoint = otlpEndpoint[7:]
+	}
+
+	exporter, err := otlptracehttp.New(ctx,
+		otlptracehttp.WithEndpoint(otlpEndpoint),
+		otlptracehttp.WithInsecure(),
 	)
+
 	if err != nil {
 		logger.Log.Error("Failed to create OTLP trace exporter", "error", err)
 		log.Fatal("Failed to create OTLP trace exporter:")
@@ -59,7 +74,7 @@ func Init(serviceName string) func() {
 	// This makes it available everywhere in your app via otel.Tracer()
 	otel.SetTracerProvider(tp)
 
-	logger.Log.Info("OpenTelemetry tracing initialized", "endpoint", "localhost:4318", "backend", "Jaeger")
+	logger.Log.Info("OpenTelemetry tracing initialized", "endpoint", otlpEndpoint, "backend", "Jaeger")
 	// Return a cleanup function
 	// Call this when the server shuts down to flush any remaining traces
 	return func() {

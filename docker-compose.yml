@@ -31,6 +31,7 @@ services:
       - MONGO_URI=mongodb://mongodb:27017/todoapi
       - API_KEY=dev-secret-key-12345
       - PORT=8080
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://tempo:4318
     networks:
       - lgtm
     depends_on:
@@ -63,8 +64,10 @@ services:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
       - GF_AUTH_DISABLE_LOGIN_FORM=true
-    volumes: 
+    volumes:
       - ./grafana-datasources.yaml:/etc/grafana/provisioning/datasources/datasources.yaml
+      - ./grafana-dashboards-provisioning.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml
+      - ./grafana-dashboard.json:/etc/grafana/provisioning/dashboards/go-todo-api-dashboard.json
     networks:
       - lgtm
     depends_on:

@@ -1,4 +1,5 @@
 # Binaries for programs and plugins
+api
 *.exe
 *.exe~
 *.dll
@@ -38,3 +39,9 @@ Thumbs.db
 # Air live-reload tool
 tmp/
 build-errors.log
+
+# Docker volumes
+mongodb_data/
+
+# Tempo data
+tempo-data/
