@@ -45,3 +45,7 @@ mongodb_data/
 
 # Tempo data
 tempo-data/
+
+# Test coverage
+coverage.out
+coverage.html
