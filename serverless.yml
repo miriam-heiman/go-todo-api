@@ -1,0 +1,83 @@
+service: go-todo-api
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: provided.al2023  # Custom runtime for Go
+  region: ${opt:region, 'us-east-1'}
+  stage: ${opt:stage, 'dev'}
+  architecture: arm64  # Use ARM64 for cost savings (Graviton2)
+
+  # IAM permissions
+  iam:
+    role:
+      statements:
+        # CloudWatch Logs
+        - Effect: Allow
+          Action:
+            - logs:CreateLogGroup
+            - logs:CreateLogStream
+            - logs:PutLogEvents
+          Resource: '*'
+        # X-Ray tracing
+        - Effect: Allow
+          Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+          Resource: '*'
+
+  # Environment variables (available to all functions)
+  environment:
+    MONGO_URI: ${env:MONGO_URI}
+    API_KEY: ${env:API_KEY}
+    API_BASE_URL: https://${self:custom.apiGatewayName}.execute-api.${self:provider.region}.amazonaws.com/${self:provider.stage}
+    OTEL_EXPORTER_OTLP_ENDPOINT: ${env:OTEL_EXPORTER_OTLP_ENDPOINT, 'http://tempo:4318'}
+    LOKI_ENDPOINT: ${env:LOKI_ENDPOINT, 'http://loki:3100'}
+
+  # API Gateway settings
+  apiGateway:
+    shouldStartNameWithService: true
+
+  # Enable X-Ray tracing
+  tracing:
+    apiGateway: true
+    lambda: true
+
+# Custom variables
+custom:
+  apiGatewayName: ${self:service}-${self:provider.stage}
+
+functions:
+  api:
+    handler: bootstrap  # Go uses 'bootstrap' as the handler name
+    timeout: 30  # 30 second timeout
+    memorySize: 512  # 512MB memory
+    events:
+      # Catch-all route - all HTTP requests go to this function
+      - httpApi:
+          path: /{proxy+}
+          method: ANY
+      # Root path
+      - httpApi:
+          path: /
+          method: ANY
+    # Tags for cost tracking
+    tags:
+      Project: go-todo-api
+      Environment: ${self:provider.stage}
+
+# Package settings
+package:
+  individually: true
+  patterns:
+    - '!./**'  # Exclude everything
+    - './bootstrap'  # Include only the binary
+
+# Plugins
+plugins:
+  - serverless-offline  # For local testing
+
+# Resources (optional)
+resources:
+  Description: Go TODO API deployed with Serverless Framework
