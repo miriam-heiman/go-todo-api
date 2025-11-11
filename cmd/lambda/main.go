@@ -8,11 +8,11 @@ package main
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"os"
 
 	// AWS Lambda libraries
+	"github.com/aws/aws-lambda-go/events"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 
@@ -53,9 +53,9 @@ func init() {
 	router := chi.NewRouter()
 
 	// Add middleware
-	router.Use(middleware.LoggingMiddleware)
-	router.Use(middleware.CORSMiddleware)
 	router.Use(middleware.TracingChi)
+	router.Use(middleware.LoggingChi)
+	router.Use(middleware.CORSChi)
 
 	// Create Huma API
 	config := huma.DefaultConfig("Go TODO API", "1.0.0")
@@ -134,7 +134,7 @@ func registerEndpoints(api huma.API) {
 
 // handler is called for each Lambda invocation
 // It reuses the httpHandler initialized in init()
-func handler(ctx context.Context, req interface{}) (interface{}, error) {
+func handler(ctx context.Context, req events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
 	return httpadapter.NewV2(httpHandler).ProxyWithContext(ctx, req)
 }
 

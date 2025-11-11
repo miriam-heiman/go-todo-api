@@ -49,3 +49,6 @@ tempo-data/
 # Test coverage
 coverage.out
 coverage.html
+
+# Lambda build artifact
+bootstrap
