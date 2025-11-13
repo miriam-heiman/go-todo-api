@@ -1,8 +1,10 @@
 module go-todo-api
 
-go 1.23.0
+go 1.24.0
 
 require (
+	github.com/aws/aws-lambda-go v1.50.0
+	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2
 	github.com/danielgtaylor/huma/v2 v2.34.1
 	github.com/go-chi/chi/v5 v5.2.2
 	github.com/joho/godotenv v1.5.1
@@ -12,6 +14,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.38.0
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
+	golang.org/x/time v0.14.0
 )
 
 require (

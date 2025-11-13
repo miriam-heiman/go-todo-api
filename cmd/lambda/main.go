@@ -55,6 +55,8 @@ func init() {
 	// Add middleware
 	router.Use(middleware.TracingChi)
 	router.Use(middleware.LoggingChi)
+	router.Use(middleware.RateLimitChi)
+	router.Use(middleware.SecurityHeadersChi)
 	router.Use(middleware.CORSChi)
 
 	// Create Huma API

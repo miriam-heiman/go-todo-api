@@ -82,6 +82,13 @@ func main() {
 	// Example log: "GET /tasks 2.5ms"
 	router.Use(middleware.LoggingChi)
 
+	// Add rate limiting middleware - prevents API abuse
+	// Limits to 10 requests/second per IP with burst capacity of 20
+	router.Use(middleware.RateLimitChi)
+
+	// Add security headers - protects against common attacks
+	router.Use(middleware.SecurityHeadersChi)
+
 	// Add CORS middleware - allows browsers from other domains to access your API
 	// CORS = Cross-Origin Resource Sharing
 	// Without this, browsers block requests from other websites for security
