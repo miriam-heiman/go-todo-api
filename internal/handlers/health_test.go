@@ -44,7 +44,7 @@ func TestHealthHandler(t *testing.T) {
 func TestHealthHandler_Integration(t *testing.T) {
 	// This tests the FULL HTTP flow (more realistic)
 
-	// Arrange: Create test API and register endpoint
+	// Arrange: Create test HTTP server
 	_, api := humatest.New(t)
 
 	// Register the health endpoint like in main.go
