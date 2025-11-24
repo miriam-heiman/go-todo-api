@@ -14,9 +14,10 @@ import (
 	"time" // time = for working with time durations and timeouts
 
 	// OUR OWN PACKAGES
-	"go-todo-api/internal/database" // Our database connection code
-	"go-todo-api/internal/logger"   // Our structured logger
-	"go-todo-api/internal/models"   // Our data structures (Task, Input/Output types)
+	"go-todo-api/internal/database"   // Our database connection code
+	"go-todo-api/internal/logger"     // Our structured logger
+	"go-todo-api/internal/models"     // Our data structures (Task, Input/Output types)
+	"go-todo-api/internal/validation" // Our input validation and sanitization
 
 	// THIRD-PARTY PACKAGES
 	"github.com/danielgtaylor/huma/v2"           // Huma = REST API framework with error helpers
@@ -144,6 +145,12 @@ func GetAllTasks(ctx context.Context, input *models.GetTasksInput) (*models.GetT
 // ============================================================================
 
 func GetTaskByID(ctx context.Context, input *models.GetTaskInput) (*models.GetTaskOutput, error) {
+	// Validate MongoDB ID format before attemption conversion
+	if !validation.ValidateMongoID(input.ID) {
+		logger.Log.Warn("Invalid MongoDB ID format", "id", input.ID)
+		return nil, huma.Error400BadRequest("Invalid task ID format")
+	}
+
 	// ----------------------------------------------------------------------------
 	// STEP 1: CONVERT STRING ID TO MONGODB OBJECTID
 	// ----------------------------------------------------------------------------
@@ -221,13 +228,31 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 	// ----------------------------------------------------------------------------
 	// STEP 1: CREATE NEW TASK STRUCT FROM INPUT
 	// ----------------------------------------------------------------------------
+	// Sanitize input before saving to database
+	title := validation.SanitizeTitle(input.Body.Title)
+	description := validation.SanitizeDescription(input.Body.Description)
+
+	// Check for NoSQL injection attempts
+	if validation.DetectNoSQLInjection(title) || validation.DetectNoSQLInjection(description) {
+		logger.Log.Warn("NoSQL injection attempt detected",
+			"title", input.Body.Title,
+			"descripton", input.Body.Description,
+		)
+		return nil, huma.Error400BadRequest("invalid input detected")
+	}
+
+	// Validate sanitzed content isn't empty
+	if validation.IsEmpty(title) {
+		return nil, huma.Error400BadRequest("Title cannot be empty")
+	}
+
 	// Take the data from the request body and create a Task struct
 	// Note: We're NOT setting the ID here - MongoDB will generate it for us
 	// Note: Completed defaults to false for new tasks
 	newTask := models.Task{
-		Title:       input.Body.Title,       // From request body
-		Description: input.Body.Description, // From request body (can be empty)
-		Completed:   false,                  // Always starts as not completed
+		Title:       title,       // Sanitized title
+		Description: description, // Sanitized description
+		Completed:   false,       // Always starts as not completed
 	}
 
 	// Add task attributes to span
@@ -299,23 +324,18 @@ func CreateTask(ctx context.Context, input *models.CreateTaskInput) (*models.Cre
 // ============================================================================
 // UpdateTask updates an existing task in the database
 // This is called when someone makes a PUT request to /tasks/{id}
-//
-// Huma Handler Signature:
-// - Input: context.Context + *models.UpdateTaskInput (contains ID + optional fields)
-// - Output: *models.UpdateTaskOutput (contains updated task) + error
-//
-// Example request:  PUT /tasks/6900d436e231fdbb964c3c1c with body: {"completed": true}
-// Example response: {"id": "6900d436e231fdbb964c3c1c", "title": "Buy milk", "completed": true}
-//
-// IMPORTANT: This is a PARTIAL update (also called PATCH-like behavior)
-// - Client only sends fields they want to change
-// - Fields not sent remain unchanged
-// - We use pointers (*string, *bool) to distinguish "not sent" from "sent but empty"
+
 func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.UpdateTaskOutput, error) {
 	// Create tracer and handler span
 	tracer := otel.Tracer("handlers")
 	ctx, handlerSpan := tracer.Start(ctx, "UpdateTask")
 	defer handlerSpan.End()
+
+	// Validate MongoDB ID format
+	if !validation.ValidateMongoID(input.ID) {
+		logger.Log.Warn("Invalid MongoDB ID format", "id", input.ID)
+		return nil, huma.Error400BadRequest("Invalid task ID format")
+	}
 
 	// Add task ID to span attributes
 	handlerSpan.SetAttributes(attribute.String("task.id", input.ID))
@@ -365,6 +385,31 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 	// ----------------------------------------------------------------------------
 	// STEP 4: BUILD UPDATE DOCUMENT WITH ONLY PROVIDED FIELDS
 	// ----------------------------------------------------------------------------
+	// Sanitize input fields if provided
+	if input.Body.Title != nil {
+		sanitized := validation.SanitizeTitle(*input.Body.Title)
+		if validation.DetectNoSQLInjection(sanitized) {
+			logger.Log.Warn("NoSQL injection attempt in title", "title", *input.Body.Title)
+			return nil, huma.Error400BadRequest("Invalid title")
+		}
+		if validation.IsEmpty(sanitized) {
+			return nil, huma.Error400BadRequest("Title cannot be empty")
+		}
+		input.Body.Title = &sanitized
+	}
+
+	if input.Body.Description != nil {
+		sanitized := validation.SanitizeDescription(*input.Body.Description)
+		if validation.DetectNoSQLInjection(sanitized) {
+			logger.Log.Warn("NoSQL injection attempt in description", "description", *input.Body.Title)
+			return nil, huma.Error400BadRequest("Invalid description")
+		}
+		if validation.IsEmpty(sanitized) {
+			return nil, huma.Error400BadRequest("Description cannot be empty")
+		}
+		input.Body.Description = &sanitized
+	}
+
 	// MongoDB update format: { "$set": { "field1": "value1", "field2": "value2" } }
 	// $set = MongoDB operator that updates specific fields without replacing entire document
 	update := bson.M{"$set": bson.M{}} // Create empty update document
@@ -453,6 +498,12 @@ func UpdateTask(ctx context.Context, input *models.UpdateTaskInput) (*models.Upd
 // Example request:  DELETE /tasks/6900d436e231fdbb964c3c1c
 // Example response: {"message": "Task deleted successfully", "id": "6900d436e231fdbb964c3c1c"}
 func DeleteTask(ctx context.Context, input *models.DeleteTaskInput) (*models.DeleteTaskOutput, error) {
+	// Validate MongoDB ID format
+	if !validation.ValidateMongoID(input.ID) {
+		logger.Log.Warn("Invalid MongodB ID format", "id", input.ID)
+		return nil, huma.Error400BadRequest("Invalid task ID format")
+	}
+
 	// Create tracer and handler span
 	tracer := otel.Tracer("handlers")
 	ctx, handlerSpan := tracer.Start(ctx, "DeleteTask")
