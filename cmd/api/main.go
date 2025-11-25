@@ -78,6 +78,10 @@ func main() {
 	// This shold be first so it measures the full request duration
 	router.Use(middleware.TracingChi)
 
+	// Add request size limit - prevents large payload attacks
+	// Reject oversized requests early (before logging/processing)
+	router.Use(middleware.RequestSizeLimitChi)
+
 	// Add logging middleware - logs every HTTP request (method, path, time)
 	// Example log: "GET /tasks 2.5ms"
 	router.Use(middleware.LoggingChi)

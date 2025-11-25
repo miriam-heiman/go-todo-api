@@ -54,6 +54,7 @@ func init() {
 
 	// Add middleware
 	router.Use(middleware.TracingChi)
+	router.Use(middleware.RequestSizeLimit)
 	router.Use(middleware.LoggingChi)
 	router.Use(middleware.RateLimitChi)
 	router.Use(middleware.SecurityHeadersChi)
